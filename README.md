@@ -2,6 +2,13 @@
 
 This project contains tools for downloading and launching Minecraft.
 
+
+## To be Done
+- [x] Changing the Nickname in launcher should change the nickname in the game
+- [x] Nickname of the player should be saved on every restart
+- [ ] Make executable on .JAR double click
+- [ ] Update UI (rather in Beta 1)
+
 ## Prerequisites
 
 - Java 11 or higher

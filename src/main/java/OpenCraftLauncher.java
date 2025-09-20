@@ -18,15 +18,17 @@ public class OpenCraftLauncher extends JFrame {
     private JButton playButton;
     private JButton downloadButton;
     private JTextArea outputArea;
+    private String originalUsername; // Track the original username from file
     
     public OpenCraftLauncher() {
         initializeGUI();
+        loadUsernameFromOptions(); // Load username on startup
     }
     
     private void initializeGUI() {
         setTitle("OpenCraft Launcher");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(900, 600);
+        setSize(800, 400);
         setLocationRelativeTo(null);
         
         // Create main panel
@@ -36,7 +38,7 @@ public class OpenCraftLauncher extends JFrame {
         // Create top panel for username input
         JPanel topPanel = new JPanel(new FlowLayout());
         JLabel usernameLabel = new JLabel("Username:");
-        usernameField = new JTextField("TestPlayer", 15);
+        usernameField = new JTextField("OpenCitizen", 15);
         downloadButton = new JButton("Download");
         playButton = new JButton("Play");
         
@@ -72,8 +74,14 @@ public class OpenCraftLauncher extends JFrame {
         public void actionPerformed(ActionEvent e) {
             String username = usernameField.getText().trim();
             if (username.isEmpty()) {
-                username = "TestPlayer";
+                username = "OpenCitizen";
             }
+            
+            // Save username to options file if it has changed
+            if (!username.equals(originalUsername)) {
+                saveUsernameToOptions(username);
+            }
+            
             final String finalUsername = username;
             
             playButton.setEnabled(false);
@@ -173,6 +181,7 @@ public class OpenCraftLauncher extends JFrame {
         try {
             // Check if required files exist
             File librariesFile = new File("minecraft/libraries.txt");
+            File opencraftOptions = new File("minecraft/opencraft_options.txt");
             File minecraftJar = new File("minecraft/versions/1.21/1.21.jar");
             
             if (!librariesFile.exists()) {
@@ -181,6 +190,25 @@ public class OpenCraftLauncher extends JFrame {
                     outputArea.append("Please run the downloader first.\n");
                 });
                 return;
+            }
+
+            if (!opencraftOptions.exists()) {
+                SwingUtilities.invokeLater(() -> {
+                    outputArea.append("Creating opencraft_options.txt with default settings...\n");
+                });
+                try {
+                    // Create the file with default user setting
+                    String defaultOptions = "username:OpenCitizen\n";
+                    Files.write(opencraftOptions.toPath(), defaultOptions.getBytes());
+                    SwingUtilities.invokeLater(() -> {
+                        outputArea.append("Created opencraft_options.txt successfully.\n");
+                    });
+                } catch (IOException ioException) {
+                    SwingUtilities.invokeLater(() -> {
+                        outputArea.append("Error creating opencraft_options.txt: " + ioException.getMessage() + "\n");
+                    });
+                    return;
+                }
             }
             
             if (!minecraftJar.exists()) {
@@ -263,6 +291,50 @@ public class OpenCraftLauncher extends JFrame {
                 outputArea.append("Minecraft launch was interrupted: " + e.getMessage() + "\n");
             });
             Thread.currentThread().interrupt();
+        }
+    }
+    
+    /**
+     * Loads username from opencraft_options.txt file if it exists
+     */
+    private void loadUsernameFromOptions() {
+        File optionsFile = new File("minecraft/opencraft_options.txt");
+        if (optionsFile.exists()) {
+            try {
+                String content = Files.readString(optionsFile.toPath()).trim();
+                if (content.startsWith("username:")) {
+                    String username = content.substring("username:".length());
+                    originalUsername = username;
+                    usernameField.setText(username);
+                    outputArea.append("Loaded username from options: " + username + "\n");
+                } else {
+                    // Handle old format or other formats
+                    originalUsername = "OpenCitizen";
+                }
+            } catch (IOException e) {
+                outputArea.append("Error reading opencraft_options.txt: " + e.getMessage() + "\n");
+                originalUsername = "OpenCitizen";
+            }
+        } else {
+            originalUsername = "OpenCitizen";
+        }
+    }
+    
+    /**
+     * Saves username to opencraft_options.txt file
+     */
+    private void saveUsernameToOptions(String username) {
+        File optionsFile = new File("minecraft/opencraft_options.txt");
+        try {
+            // Create minecraft directory if it doesn't exist
+            optionsFile.getParentFile().mkdirs();
+            
+            String content = "username:" + username;
+            Files.write(optionsFile.toPath(), content.getBytes());
+            originalUsername = username; // Update tracked original username
+            outputArea.append("Saved username to options: " + username + "\n");
+        } catch (IOException e) {
+            outputArea.append("Error saving username to opencraft_options.txt: " + e.getMessage() + "\n");
         }
     }
     
