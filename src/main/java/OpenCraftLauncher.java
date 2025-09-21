@@ -26,11 +26,13 @@ public class OpenCraftLauncher extends JFrame {
     private static final long serialVersionUID = 1L;
     
     private JTextField usernameField;
+    private JLabel emailLabel; // Label to display authenticated user's email
     private JButton playButton;
     private JButton downloadButton;
     private JButton loginButton;
     private JTextArea outputArea;
     private String originalUsername; // Track the original username from file
+    private String authenticatedEmail; // Store authenticated user's email
     private boolean isAuthenticated = false; // Authentication status
     private transient HttpClient httpClient;
     private transient ServerSocket callbackServer; // For receiving OAuth callback
@@ -66,8 +68,25 @@ public class OpenCraftLauncher extends JFrame {
         usernameField = new JTextField("OpenCitizen", 15);
         topPanel.add(usernameField, gbc);
         
+        // Email row (initially hidden)
+        gbc.gridx = 0; gbc.gridy = 1; gbc.anchor = GridBagConstraints.WEST; gbc.fill = GridBagConstraints.NONE; gbc.weightx = 0;
+        JLabel emailLabelText = new JLabel("Email:");
+        emailLabelText.setVisible(false);
+        topPanel.add(emailLabelText, gbc);
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0;
+        emailLabel = new JLabel("");
+        emailLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+        emailLabel.setOpaque(true);
+        emailLabel.setBackground(Color.LIGHT_GRAY);
+        emailLabel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+        emailLabel.setVisible(false);
+        topPanel.add(emailLabel, gbc);
+        
+        // Store references to email components for show/hide
+        emailLabel.putClientProperty("emailLabelText", emailLabelText);
+        
         // Buttons row
-        gbc.gridx = 0; gbc.gridy = 1; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE; gbc.weightx = 0;
+        gbc.gridx = 0; gbc.gridy = 2; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE; gbc.weightx = 0;
         JPanel buttonPanel = new JPanel(new FlowLayout());
         
         loginButton = new JButton("Login");
@@ -236,9 +255,13 @@ public class OpenCraftLauncher extends JFrame {
                 SwingUtilities.invokeLater(() -> {
                     if (finalAuthSuccess) {
                         isAuthenticated = true;
+                        authenticatedEmail = finalUsername; // Store the email
                         loginButton.setText("Logout");
                         loginButton.setEnabled(true);
                         playButton.setEnabled(true);
+                        
+                        // Show email and disable username field
+                        showEmailAndDisableUsername(finalUsername);
                         
                         outputArea.append("Authentication successful!\n");
                         outputArea.append("isAuthenticated = " + isAuthenticated + "\n");
@@ -285,8 +308,13 @@ public class OpenCraftLauncher extends JFrame {
         
         private void logout() {
             isAuthenticated = false;
+            authenticatedEmail = null;
             loginButton.setText("Login");
             playButton.setEnabled(false);
+            
+            // Hide email and enable username field
+            hideEmailAndEnableUsername();
+            
             outputArea.append("Logged out successfully.\n");
             outputArea.append("isAuthenticated = " + isAuthenticated + "\n");
             outputArea.append("Please login to enable the Play button.\n\n");
@@ -307,8 +335,9 @@ public class OpenCraftLauncher extends JFrame {
                 username = "OpenCitizen";
             }
             
-            // Save username to options file if it has changed
-            if (!username.equals(originalUsername)) {
+            // Only save username to options file if user is not authenticated (field is editable)
+            // When authenticated, the username field is disabled and shouldn't be saved
+            if (!isAuthenticated && !username.equals(originalUsername)) {
                 saveUsernameToOptions(username);
             }
             
@@ -522,6 +551,49 @@ public class OpenCraftLauncher extends JFrame {
             });
             Thread.currentThread().interrupt();
         }
+    }
+    
+    /**
+     * Shows the email label and disables the username field when authenticated
+     */
+    private void showEmailAndDisableUsername(String email) {
+        emailLabel.setText(email);
+        emailLabel.setVisible(true);
+        
+        // Show the "Email:" label too
+        JLabel emailLabelText = (JLabel) emailLabel.getClientProperty("emailLabelText");
+        if (emailLabelText != null) {
+            emailLabelText.setVisible(true);
+        }
+        
+        // Disable username field
+        usernameField.setEnabled(false);
+        usernameField.setBackground(Color.LIGHT_GRAY);
+        
+        // Force layout refresh
+        revalidate();
+        repaint();
+    }
+    
+    /**
+     * Hides the email label and enables the username field when logged out
+     */
+    private void hideEmailAndEnableUsername() {
+        emailLabel.setVisible(false);
+        
+        // Hide the "Email:" label too
+        JLabel emailLabelText = (JLabel) emailLabel.getClientProperty("emailLabelText");
+        if (emailLabelText != null) {
+            emailLabelText.setVisible(false);
+        }
+        
+        // Enable username field and restore original background
+        usernameField.setEnabled(true);
+        usernameField.setBackground(Color.WHITE);
+        
+        // Force layout refresh
+        revalidate();
+        repaint();
     }
     
     /**
