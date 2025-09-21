@@ -179,6 +179,7 @@ public class OpenCraftLauncher extends JFrame {
                 // Parse the request to extract authentication result
                 boolean authSuccess = false;
                 String username = null;
+                String characterName = null;
                 
                 if (requestLine != null && requestLine.startsWith("GET /callback")) {
                     // Extract query parameters
@@ -199,6 +200,8 @@ public class OpenCraftLauncher extends JFrame {
                                         authSuccess = true;
                                     } else if ("username".equals(key)) {
                                         username = value;
+                                    } else if ("character_name".equals(key)) {
+                                        characterName = value;
                                     }
                                 }
                             }
@@ -228,6 +231,7 @@ public class OpenCraftLauncher extends JFrame {
                 // Update UI based on authentication result
                 final boolean finalAuthSuccess = authSuccess;
                 final String finalUsername = username;
+                final String finalCharacterName = characterName;
                 
                 SwingUtilities.invokeLater(() -> {
                     if (finalAuthSuccess) {
@@ -240,8 +244,16 @@ public class OpenCraftLauncher extends JFrame {
                         outputArea.append("isAuthenticated = " + isAuthenticated + "\n");
                         
                         if (finalUsername != null) {
-                            usernameField.setText(finalUsername);
                             outputArea.append("Authenticated as: " + finalUsername + "\n");
+                            
+                            // Use character name if available, otherwise use email as username
+                            if (finalCharacterName != null && !finalCharacterName.trim().isEmpty()) {
+                                usernameField.setText(finalCharacterName);
+                                outputArea.append("Character name: " + finalCharacterName + "\n");
+                            } else {
+                                usernameField.setText(finalUsername);
+                                outputArea.append("No character name set. Using email as username.\n");
+                            }
                         }
                         
                         outputArea.append("Play button is now enabled.\n\n");
