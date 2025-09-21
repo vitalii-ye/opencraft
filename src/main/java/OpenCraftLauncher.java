@@ -8,19 +8,38 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
 
 /**
  * OpenCraft Launcher - A simple GUI launcher for Minecraft
  * This class provides a simple Swing-based interface to launch Minecraft
  */
 public class OpenCraftLauncher extends JFrame {
+    private static final long serialVersionUID = 1L;
+    
     private JTextField usernameField;
     private JButton playButton;
     private JButton downloadButton;
+    private JButton loginButton;
     private JTextArea outputArea;
     private String originalUsername; // Track the original username from file
+    private boolean isAuthenticated = false; // Authentication status
+    private transient HttpClient httpClient;
+    private transient ServerSocket callbackServer; // For receiving OAuth callback
+    private static final int CALLBACK_PORT = 8080; // Local port for OAuth callback
+    private static final String AUTH_URL = "http://localhost:8000/auth/google"; // Your website auth URL
     
+    @SuppressWarnings("this-escape")
     public OpenCraftLauncher() {
+        httpClient = HttpClient.newHttpClient();
         initializeGUI();
         loadUsernameFromOptions(); // Load username on startup
     }
@@ -28,24 +47,40 @@ public class OpenCraftLauncher extends JFrame {
     private void initializeGUI() {
         setTitle("OpenCraft Launcher");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(800, 400);
+        setSize(900, 450);
         setLocationRelativeTo(null);
         
         // Create main panel
         JPanel mainPanel = new JPanel(new BorderLayout());
         mainPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         
-        // Create top panel for username input
-        JPanel topPanel = new JPanel(new FlowLayout());
-        JLabel usernameLabel = new JLabel("Username:");
+        // Create top panel for user input and buttons
+        JPanel topPanel = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(5, 5, 5, 5);
+        
+        // Username row
+        gbc.gridx = 0; gbc.gridy = 0; gbc.anchor = GridBagConstraints.WEST;
+        topPanel.add(new JLabel("Username:"), gbc);
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0;
         usernameField = new JTextField("OpenCitizen", 15);
+        topPanel.add(usernameField, gbc);
+        
+        // Buttons row
+        gbc.gridx = 0; gbc.gridy = 1; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE; gbc.weightx = 0;
+        JPanel buttonPanel = new JPanel(new FlowLayout());
+        
+        loginButton = new JButton("Login");
         downloadButton = new JButton("Download");
         playButton = new JButton("Play");
         
-        topPanel.add(usernameLabel);
-        topPanel.add(usernameField);
-        topPanel.add(downloadButton);
-        topPanel.add(playButton);
+        // Initially disable play button until authenticated
+        playButton.setEnabled(false);
+        
+        buttonPanel.add(loginButton);
+        buttonPanel.add(downloadButton);
+        buttonPanel.add(playButton);
+        topPanel.add(buttonPanel, gbc);
         
         // Create output area
         outputArea = new JTextArea();
@@ -61,17 +96,200 @@ public class OpenCraftLauncher extends JFrame {
         
         add(mainPanel);
         
-        // Add action listener to play button
+        // Add action listeners
+        loginButton.addActionListener(new LoginButtonListener());
         playButton.addActionListener(new PlayButtonListener());
         downloadButton.addActionListener(new DownloadButtonListener());
         
         // Set initial focus
         SwingUtilities.invokeLater(() -> usernameField.requestFocus());
+        
+        // Add authentication status to output
+        outputArea.append("Authentication status: Not authenticated\n");
+        outputArea.append("Please login to enable the Play button.\n\n");
+    }
+    
+    private class LoginButtonListener implements ActionListener {
+        @Override
+        public void actionPerformed(ActionEvent e) {
+            if (isAuthenticated) {
+                // If already authenticated, allow logout
+                logout();
+                return;
+            }
+            
+            loginButton.setEnabled(false);
+            loginButton.setText("Authenticating...");
+            outputArea.append("Starting authentication process...\n");
+            
+            // Start authentication in a separate thread
+            SwingWorker<Void, String> worker = new SwingWorker<Void, String>() {
+                @Override
+                protected Void doInBackground() throws Exception {
+                    authenticate();
+                    return null;
+                }
+                
+                @Override
+                protected void process(java.util.List<String> chunks) {
+                    for (String message : chunks) {
+                        outputArea.append(message + "\n");
+                        outputArea.setCaretPosition(outputArea.getDocument().getLength());
+                    }
+                }
+                
+                @Override
+                protected void done() {
+                    // Button state will be updated by authentication result
+                }
+            };
+            
+            worker.execute();
+        }
+        
+        private void authenticate() {
+            try {
+                // Start local callback server
+                callbackServer = new ServerSocket(CALLBACK_PORT);
+                SwingUtilities.invokeLater(() -> {
+                    outputArea.append("Started local callback server on port " + CALLBACK_PORT + "\n");
+                    outputArea.append("Opening browser for authentication...\n");
+                });
+                
+                // Open browser with authentication URL
+                String authUrlWithCallback = AUTH_URL + "?callback=http://localhost:" + CALLBACK_PORT + "/callback";
+                Desktop.getDesktop().browse(URI.create(authUrlWithCallback));
+                
+                SwingUtilities.invokeLater(() -> {
+                    outputArea.append("Please complete authentication in your browser.\n");
+                    outputArea.append("Waiting for authentication response...\n");
+                });
+                
+                // Wait for callback
+                Socket clientSocket = callbackServer.accept();
+                BufferedReader reader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+                PrintWriter writer = new PrintWriter(clientSocket.getOutputStream(), true);
+                
+                // Read the HTTP request
+                String requestLine = reader.readLine();
+                SwingUtilities.invokeLater(() -> {
+                    outputArea.append("Received callback: " + requestLine + "\n");
+                });
+                
+                // Parse the request to extract authentication result
+                boolean authSuccess = false;
+                String username = null;
+                
+                if (requestLine != null && requestLine.startsWith("GET /callback")) {
+                    // Extract query parameters
+                    String[] parts = requestLine.split(" ");
+                    if (parts.length >= 2) {
+                        String path = parts[1];
+                        if (path.contains("?")) {
+                            String queryString = path.split("\\?")[1];
+                            String[] params = queryString.split("&");
+                            
+                            for (String param : params) {
+                                String[] keyValue = param.split("=");
+                                if (keyValue.length == 2) {
+                                    String key = keyValue[0];
+                                    String value = java.net.URLDecoder.decode(keyValue[1], "UTF-8");
+                                    
+                                    if ("success".equals(key) && "true".equals(value)) {
+                                        authSuccess = true;
+                                    } else if ("username".equals(key)) {
+                                        username = value;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Send response to browser
+                String responseBody;
+                if (authSuccess) {
+                    responseBody = "<html><body><h2>Authentication Successful!</h2><p>You can close this window and return to OpenCraft Launcher.</p></body></html>";
+                } else {
+                    responseBody = "<html><body><h2>Authentication Failed</h2><p>Please try again.</p></body></html>";
+                }
+                
+                writer.println("HTTP/1.1 200 OK");
+                writer.println("Content-Type: text/html");
+                writer.println("Content-Length: " + responseBody.length());
+                writer.println();
+                writer.println(responseBody);
+                writer.flush();
+                
+                // Close connections
+                clientSocket.close();
+                callbackServer.close();
+                
+                // Update UI based on authentication result
+                final boolean finalAuthSuccess = authSuccess;
+                final String finalUsername = username;
+                
+                SwingUtilities.invokeLater(() -> {
+                    if (finalAuthSuccess) {
+                        isAuthenticated = true;
+                        loginButton.setText("Logout");
+                        loginButton.setEnabled(true);
+                        playButton.setEnabled(true);
+                        
+                        outputArea.append("Authentication successful!\n");
+                        outputArea.append("isAuthenticated = " + isAuthenticated + "\n");
+                        
+                        if (finalUsername != null) {
+                            usernameField.setText(finalUsername);
+                            outputArea.append("Authenticated as: " + finalUsername + "\n");
+                        }
+                        
+                        outputArea.append("Play button is now enabled.\n\n");
+                    } else {
+                        outputArea.append("Authentication failed. Please try again.\n");
+                        outputArea.append("isAuthenticated = " + isAuthenticated + "\n\n");
+                        loginButton.setText("Login");
+                        loginButton.setEnabled(true);
+                    }
+                });
+                
+            } catch (Exception ex) {
+                SwingUtilities.invokeLater(() -> {
+                    outputArea.append("Authentication error: " + ex.getMessage() + "\n");
+                    outputArea.append("isAuthenticated = " + isAuthenticated + "\n\n");
+                    loginButton.setText("Login");
+                    loginButton.setEnabled(true);
+                });
+                
+                try {
+                    if (callbackServer != null && !callbackServer.isClosed()) {
+                        callbackServer.close();
+                    }
+                } catch (IOException closeEx) {
+                    // Ignore close errors
+                }
+            }
+        }
+        
+        private void logout() {
+            isAuthenticated = false;
+            loginButton.setText("Login");
+            playButton.setEnabled(false);
+            outputArea.append("Logged out successfully.\n");
+            outputArea.append("isAuthenticated = " + isAuthenticated + "\n");
+            outputArea.append("Please login to enable the Play button.\n\n");
+        }
     }
     
     private class PlayButtonListener implements ActionListener {
         @Override
         public void actionPerformed(ActionEvent e) {
+            // Check if user is authenticated
+            if (!isAuthenticated) {
+                outputArea.append("Please login first before playing.\n");
+                return;
+            }
+            
             String username = usernameField.getText().trim();
             if (username.isEmpty()) {
                 username = "OpenCitizen";
@@ -263,7 +481,7 @@ public class OpenCraftLauncher extends JFrame {
             Process process = pb.start();
             
             // Read output from the process
-            try (var reader = process.inputReader()) {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     final String outputLine = line;
