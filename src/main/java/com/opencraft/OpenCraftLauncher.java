@@ -6,42 +6,40 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+// import java.net.http.HttpClient;
+// import java.net.http.HttpRequest;
+// import java.net.http.HttpResponse;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 
-/**
- * OpenCraft Launcher - A simple GUI launcher for Minecraft
- * This class provides a simple Swing-based interface to launch Minecraft
- */
 public class OpenCraftLauncher extends JFrame {
   private static final long serialVersionUID = 1L;
-
   private JTextField usernameField;
   private JLabel emailLabel; // Label to display authenticated user's email
   private JButton playButton;
   private JButton downloadButton;
   private JButton loginButton;
-  private JTextArea outputArea;
+  // private JTextArea outputArea;
   private String originalUsername; // Track the original username from file
   private String authenticatedEmail; // Store authenticated user's email
-  private boolean isAuthenticated = false; // Authentication status
-  private transient HttpClient httpClient;
+  // Temporary solution change in release
+  private boolean isAuthenticated = true; // Authentication status
+  // private transient HttpClient httpClient;
   private transient ServerSocket callbackServer; // For receiving OAuth callback
   private static final int CALLBACK_PORT = 8080; // Local port for OAuth callback
   private static final String AUTH_URL = "http://localhost:8000/auth/google"; // Your website auth URL
 
   @SuppressWarnings("this-escape")
   public OpenCraftLauncher() {
-    httpClient = HttpClient.newHttpClient();
+    // httpClient = HttpClient.newHttpClient();
     initializeGUI();
     loadUsernameFromOptions(); // Load username on startup
   }
@@ -49,8 +47,7 @@ public class OpenCraftLauncher extends JFrame {
   private void initializeGUI() {
     setTitle("OpenCraft Launcher");
     setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-    setSize(900, 450);
-    setLocationRelativeTo(null);
+    setSize(600, 250);
 
     // Create main panel
     JPanel mainPanel = new JPanel(new BorderLayout());
@@ -96,12 +93,13 @@ public class OpenCraftLauncher extends JFrame {
     emailLabel.putClientProperty("emailLabelText", emailLabelText);
 
     // Buttons row
-    gbc.gridx = 0;
+    gbc.gridx = 1;
     gbc.gridy = 2;
     gbc.gridwidth = 2;
     gbc.fill = GridBagConstraints.NONE;
     gbc.weightx = 0;
-    JPanel buttonPanel = new JPanel(new FlowLayout());
+    JPanel buttonPanel = new JPanel(new GridLayout(3, 1));
+    buttonPanel.setLayout(new BoxLayout(buttonPanel, BoxLayout.Y_AXIS));
 
     loginButton = new JButton("Login");
     downloadButton = new JButton("Download");
@@ -116,16 +114,16 @@ public class OpenCraftLauncher extends JFrame {
     topPanel.add(buttonPanel, gbc);
 
     // Create output area
-    outputArea = new JTextArea();
-    outputArea.setEditable(false);
-    outputArea.setBackground(Color.BLACK);
-    outputArea.setForeground(Color.WHITE);
-    outputArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-    JScrollPane scrollPane = new JScrollPane(outputArea);
-    scrollPane.setPreferredSize(new Dimension(480, 300));
+    // outputArea = new JTextArea();
+    // outputArea.setEditable(false);
+    // outputArea.setBackground(Color.BLACK);
+    // outputArea.setForeground(Color.WHITE);
+    // outputArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+    // JScrollPane scrollPane = new JScrollPane(outputArea);
+    // scrollPane.setPreferredSize(new Dimension(480, 300));
 
     mainPanel.add(topPanel, BorderLayout.NORTH);
-    mainPanel.add(scrollPane, BorderLayout.CENTER);
+    // mainPanel.add(scrollPane, BorderLayout.CENTER);
 
     add(mainPanel);
 
@@ -153,7 +151,7 @@ public class OpenCraftLauncher extends JFrame {
 
       loginButton.setEnabled(false);
       loginButton.setText("Authenticating...");
-      outputArea.append("Starting authentication process...\n");
+      // outputArea.append("Starting authentication process...\n");
 
       // Start authentication in a separate thread
       SwingWorker<Void, String> worker = new SwingWorker<Void, String>() {
@@ -166,15 +164,15 @@ public class OpenCraftLauncher extends JFrame {
         @Override
         protected void process(java.util.List<String> chunks) {
           for (String message : chunks) {
-            outputArea.append(message + "\n");
-            outputArea.setCaretPosition(outputArea.getDocument().getLength());
+            // outputArea.append(message + "\n");
+            // outputArea.setCaretPosition(outputArea.getDocument().getLength());
           }
         }
 
-        @Override
-        protected void done() {
-          // Button state will be updated by authentication result
-        }
+        // @Override
+        // protected void done() {
+        // // Button state will be updated by authentication result
+        // }
       };
 
       worker.execute();
@@ -185,8 +183,9 @@ public class OpenCraftLauncher extends JFrame {
         // Start local callback server
         callbackServer = new ServerSocket(CALLBACK_PORT);
         SwingUtilities.invokeLater(() -> {
-          outputArea.append("Started local callback server on port " + CALLBACK_PORT + "\n");
-          outputArea.append("Opening browser for authentication...\n");
+          // outputArea.append("Started local callback server on port " + CALLBACK_PORT +
+          // "\n");
+          // outputArea.append("Opening browser for authentication...\n");
         });
 
         // Open browser with authentication URL
@@ -194,8 +193,8 @@ public class OpenCraftLauncher extends JFrame {
         Desktop.getDesktop().browse(URI.create(authUrlWithCallback));
 
         SwingUtilities.invokeLater(() -> {
-          outputArea.append("Please complete authentication in your browser.\n");
-          outputArea.append("Waiting for authentication response...\n");
+          // outputArea.append("Please complete authentication in your browser.\n");
+          // outputArea.append("Waiting for authentication response...\n");
         });
 
         // Wait for callback
@@ -206,7 +205,7 @@ public class OpenCraftLauncher extends JFrame {
         // Read the HTTP request
         String requestLine = reader.readLine();
         SwingUtilities.invokeLater(() -> {
-          outputArea.append("Received callback: " + requestLine + "\n");
+          // outputArea.append("Received callback: " + requestLine + "\n");
         });
 
         // Parse the request to extract authentication result
@@ -277,26 +276,26 @@ public class OpenCraftLauncher extends JFrame {
             // Show email and disable username field
             showEmailAndDisableUsername(finalUsername);
 
-            outputArea.append("Authentication successful!\n");
-            outputArea.append("isAuthenticated = " + isAuthenticated + "\n");
+            // outputArea.append("Authentication successful!\n");
+            // outputArea.append("isAuthenticated = " + isAuthenticated + "\n");
 
             if (finalUsername != null) {
-              outputArea.append("Authenticated as: " + finalUsername + "\n");
+              // outputArea.append("Authenticated as: " + finalUsername + "\n");
 
               // Use character name if available, otherwise use email as username
               if (finalCharacterName != null && !finalCharacterName.trim().isEmpty()) {
                 usernameField.setText(finalCharacterName);
-                outputArea.append("Character name: " + finalCharacterName + "\n");
+                // outputArea.append("Character name: " + finalCharacterName + "\n");
               } else {
                 usernameField.setText(finalUsername);
-                outputArea.append("No character name set. Using email as username.\n");
+                // outputArea.append("No character name set. Using email as username.\n");
               }
             }
 
-            outputArea.append("Play button is now enabled.\n\n");
+            // outputArea.append("Play button is now enabled.\n\n");
           } else {
-            outputArea.append("Authentication failed. Please try again.\n");
-            outputArea.append("isAuthenticated = " + isAuthenticated + "\n\n");
+            // outputArea.append("Authentication failed. Please try again.\n");
+            // outputArea.append("isAuthenticated = " + isAuthenticated + "\n\n");
             loginButton.setText("Login");
             loginButton.setEnabled(true);
           }
@@ -304,8 +303,8 @@ public class OpenCraftLauncher extends JFrame {
 
       } catch (Exception ex) {
         SwingUtilities.invokeLater(() -> {
-          outputArea.append("Authentication error: " + ex.getMessage() + "\n");
-          outputArea.append("isAuthenticated = " + isAuthenticated + "\n\n");
+          // outputArea.append("Authentication error: " + ex.getMessage() + "\n");
+          // outputArea.append("isAuthenticated = " + isAuthenticated + "\n\n");
           loginButton.setText("Login");
           loginButton.setEnabled(true);
         });
@@ -329,9 +328,9 @@ public class OpenCraftLauncher extends JFrame {
       // Hide email and enable username field
       hideEmailAndEnableUsername();
 
-      outputArea.append("Logged out successfully.\n");
-      outputArea.append("isAuthenticated = " + isAuthenticated + "\n");
-      outputArea.append("Please login to enable the Play button.\n\n");
+      // outputArea.append("Logged out successfully.\n");
+      // outputArea.append("isAuthenticated = " + isAuthenticated + "\n");
+      // outputArea.append("Please login to enable the Play button.\n\n");
     }
   }
 
@@ -352,15 +351,15 @@ public class OpenCraftLauncher extends JFrame {
       // Only save username to options file if user is not authenticated (field is
       // editable)
       // When authenticated, the username field is disabled and shouldn't be saved
-      // if (!isAuthenticated && !username.equals(originalUsername)) {
-      // saveUsernameToOptions(username);
-      // }
+      if (!isAuthenticated && !username.equals(originalUsername)) {
+        saveUsernameToOptions(username);
+      }
 
       final String finalUsername = username;
 
       // playButton.setEnabled(false);
       playButton.setText("Starting...");
-      outputArea.setText("");
+      // outputArea.setText("");
 
       // Run minecraft launcher in a separate thread
       SwingWorker<Void, String> worker = new SwingWorker<Void, String>() {
@@ -373,8 +372,8 @@ public class OpenCraftLauncher extends JFrame {
         @Override
         protected void process(java.util.List<String> chunks) {
           for (String message : chunks) {
-            outputArea.append(message + "\n");
-            outputArea.setCaretPosition(outputArea.getDocument().getLength());
+            // outputArea.append(message + "\n");
+            // outputArea.setCaretPosition(outputArea.getDocument().getLength());
           }
         }
 
@@ -394,7 +393,7 @@ public class OpenCraftLauncher extends JFrame {
     public void actionPerformed(ActionEvent e) {
       downloadButton.setEnabled(false);
       downloadButton.setText("Downloading...");
-      outputArea.setText("");
+      // outputArea.setText("");
 
       // Run downloader in a separate thread
       SwingWorker<Void, String> worker = new SwingWorker<Void, String>() {
@@ -435,8 +434,8 @@ public class OpenCraftLauncher extends JFrame {
         @Override
         protected void process(java.util.List<String> chunks) {
           for (String message : chunks) {
-            outputArea.append(message + "\n");
-            outputArea.setCaretPosition(outputArea.getDocument().getLength());
+            // outputArea.append(message + "\n");
+            // outputArea.setCaretPosition(outputArea.getDocument().getLength());
           }
         }
 
@@ -460,26 +459,28 @@ public class OpenCraftLauncher extends JFrame {
 
       if (!librariesFile.exists()) {
         SwingUtilities.invokeLater(() -> {
-          outputArea.append("Error: minecraft/libraries.txt not found!\n");
-          outputArea.append("Please run the downloader first.\n");
+          // outputArea.append("Error: minecraft/libraries.txt not found!\n");
+          // outputArea.append("Please run the downloader first.\n");
         });
         return;
       }
 
       if (!opencraftOptions.exists()) {
         SwingUtilities.invokeLater(() -> {
-          outputArea.append("Creating opencraft_options.txt with default settings...\n");
+          // outputArea.append("Creating opencraft_options.txt with default
+          // settings...\n");
         });
         try {
           // Create the file with default user setting
           String defaultOptions = "username:OpenCitizen\n";
           Files.write(opencraftOptions.toPath(), defaultOptions.getBytes());
           SwingUtilities.invokeLater(() -> {
-            outputArea.append("Created opencraft_options.txt successfully.\n");
+            // outputArea.append("Created opencraft_options.txt successfully.\n");
           });
         } catch (IOException ioException) {
           SwingUtilities.invokeLater(() -> {
-            outputArea.append("Error creating opencraft_options.txt: " + ioException.getMessage() + "\n");
+            // outputArea.append("Error creating opencraft_options.txt: " +
+            // ioException.getMessage() + "\n");
           });
           return;
         }
@@ -487,15 +488,15 @@ public class OpenCraftLauncher extends JFrame {
 
       if (!minecraftJar.exists()) {
         SwingUtilities.invokeLater(() -> {
-          outputArea.append("Error: minecraft/versions/1.21/1.21.jar not found!\n");
-          outputArea.append("Please run the downloader first.\n");
+          // outputArea.append("Error: minecraft/versions/1.21/1.21.jar not found!\n");
+          // outputArea.append("Please run the downloader first.\n");
         });
         return;
       }
 
       SwingUtilities.invokeLater(() -> {
-        outputArea.append("Starting Minecraft for user: " + username + "\n");
-        outputArea.append("Loading libraries...\n");
+        // outputArea.append("Starting Minecraft for user: " + username + "\n");
+        // outputArea.append("Loading libraries...\n");
       });
 
       // Read libraries path
@@ -503,11 +504,11 @@ public class OpenCraftLauncher extends JFrame {
 
       // Build the command
       ProcessBuilder pb = new ProcessBuilder();
-      
+
       // Check if running on macOS and add -XstartOnFirstThread flag
       String osName = System.getProperty("os.name").toLowerCase();
       boolean isMac = osName.contains("mac") || osName.contains("darwin");
-      
+
       if (isMac) {
         pb.command(
             "java",
@@ -553,10 +554,11 @@ public class OpenCraftLauncher extends JFrame {
       pb.directory(new File("."));
 
       SwingUtilities.invokeLater(() -> {
-        outputArea.append("Launching Minecraft...\n");
-        outputArea.append("Command: " + String.join(" ", pb.command()) + "\n");
-        outputArea.append("Working directory: " + pb.directory().getAbsolutePath() + "\n");
-        outputArea.append("=====================================\n");
+        // outputArea.append("Launching Minecraft...\n");
+        // outputArea.append("Command: " + String.join(" ", pb.command()) + "\n");
+        // outputArea.append("Working directory: " + pb.directory().getAbsolutePath() +
+        // "\n");
+        // outputArea.append("=====================================\n");
       });
 
       // Start the process
@@ -568,8 +570,8 @@ public class OpenCraftLauncher extends JFrame {
         while ((line = reader.readLine()) != null) {
           final String outputLine = line;
           SwingUtilities.invokeLater(() -> {
-            outputArea.append(outputLine + "\n");
-            outputArea.setCaretPosition(outputArea.getDocument().getLength());
+            // outputArea.append(outputLine + "\n");
+            // outputArea.setCaretPosition(outputArea.getDocument().getLength());
           });
         }
       }
@@ -577,18 +579,19 @@ public class OpenCraftLauncher extends JFrame {
       // Wait for process to complete
       int exitCode = process.waitFor();
       SwingUtilities.invokeLater(() -> {
-        outputArea.append("=====================================\n");
-        outputArea.append("Minecraft exited with code: " + exitCode + "\n");
+        // outputArea.append("=====================================\n");
+        // outputArea.append("Minecraft exited with code: " + exitCode + "\n");
       });
 
     } catch (IOException e) {
       SwingUtilities.invokeLater(() -> {
-        outputArea.append("Error starting Minecraft: " + e.getMessage() + "\n");
+        // outputArea.append("Error starting Minecraft: " + e.getMessage() + "\n");
         e.printStackTrace();
       });
     } catch (InterruptedException e) {
       SwingUtilities.invokeLater(() -> {
-        outputArea.append("Minecraft launch was interrupted: " + e.getMessage() + "\n");
+        // outputArea.append("Minecraft launch was interrupted: " + e.getMessage() +
+        // "\n");
       });
       Thread.currentThread().interrupt();
     }
@@ -649,13 +652,14 @@ public class OpenCraftLauncher extends JFrame {
           String username = content.substring("username:".length());
           originalUsername = username;
           usernameField.setText(username);
-          outputArea.append("Loaded username from options: " + username + "\n");
+          // outputArea.append("Loaded username from options: " + username + "\n");
         } else {
           // Handle old format or other formats
           originalUsername = "OpenCitizen";
         }
       } catch (IOException e) {
-        outputArea.append("Error reading opencraft_options.txt: " + e.getMessage() + "\n");
+        // outputArea.append("Error reading opencraft_options.txt: " + e.getMessage() +
+        // "\n");
         originalUsername = "OpenCitizen";
       }
     } else {
@@ -667,17 +671,16 @@ public class OpenCraftLauncher extends JFrame {
    * Saves username to opencraft_options.txt file
    */
   private void saveUsernameToOptions(String username) {
-    File optionsFile = new File("minecraft/opencraft_options.txt");
+    Path optionsPath = Paths.get("minecraft/opencraft_options.txt");
     try {
-      // Create minecraft directory if it doesn't exist
-      optionsFile.getParentFile().mkdirs();
+      Files.createDirectories(optionsPath.getParent());
+      Files.writeString(optionsPath, "username:" + username, StandardCharsets.UTF_8);
 
-      String content = "username:" + username;
-      Files.write(optionsFile.toPath(), content.getBytes());
-      originalUsername = username; // Update tracked original username
-      outputArea.append("Saved username to options: " + username + "\n");
+      originalUsername = username;
+      // outputArea.append("Saved username to options: " + username + "\n");
     } catch (IOException e) {
-      outputArea.append("Error saving username to opencraft_options.txt: " + e.getMessage() + "\n");
+      // outputArea.append("Error saving username to opencraft_options.txt: " +
+      // e.getMessage() + "\n");
     }
   }
 

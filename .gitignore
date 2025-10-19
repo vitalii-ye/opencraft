@@ -1,3 +1,7 @@
 logs
 minecraft
 target
+.project
+.settings
+.DS_Store
+.classpath
