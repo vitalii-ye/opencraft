@@ -23,12 +23,12 @@ public class MinecraftDownloader {
   private static final HttpClient client = HttpClient.newHttpClient();
   private static final ObjectMapper mapper = new ObjectMapper();
 
-  public static void downloadMinecraft(String manifestUrl, Path baseDir) throws IOException, InterruptedException {
+  public static void downloadMinecraft(String manifestUrl, Path baseDir, String versionId) throws IOException, InterruptedException {
     // Load manifest JSON
     JsonNode root = fetchJson(manifestUrl);
 
     // Save the manifest JSON for the launcher
-    Path manifestPath = baseDir.resolve("versions/1.21/1.21.json");
+    Path manifestPath = baseDir.resolve("versions/" + versionId + "/" + versionId + ".json");
     Files.createDirectories(manifestPath.getParent());
     mapper.writeValue(manifestPath.toFile(), root);
     System.out.println("Saved manifest: " + manifestPath);
@@ -37,7 +37,7 @@ public class MinecraftDownloader {
     JsonNode downloads = root.path("downloads").path("client");
     if (!downloads.isMissingNode()) {
       String jarUrl = downloads.get("url").asText();
-      Path jarPath = baseDir.resolve("versions/1.21/1.21.jar");
+      Path jarPath = baseDir.resolve("versions/" + versionId + "/" + versionId + ".jar");
       downloadFile(jarUrl, jarPath);
     }
 
@@ -87,11 +87,11 @@ public class MinecraftDownloader {
     }
 
     // Create libraries.txt with the classpath
-    Path librariesTxtPath = baseDir.resolve("libraries.txt");
+    Path librariesTxtPath = baseDir.resolve("libraries_" + versionId + ".txt");
     String classpathString = String.join(File.pathSeparator, classpathEntries);
     Files.writeString(librariesTxtPath, classpathString, StandardOpenOption.CREATE,
         StandardOpenOption.TRUNCATE_EXISTING);
-    System.out.println("Created libraries.txt with " + classpathEntries.size() + " entries");
+    System.out.println("Created libraries_" + versionId + ".txt with " + classpathEntries.size() + " entries");
     System.out.println("Using path separator: " + File.pathSeparator);
 
     // Download assets index
@@ -107,6 +107,20 @@ public class MinecraftDownloader {
     }
 
     System.out.println("All required files downloaded into: " + baseDir.toAbsolutePath());
+  }
+
+  /**
+   * Downloads a specific Minecraft version using a MinecraftVersion object
+   */
+  public static void downloadMinecraft(MinecraftVersionManager.MinecraftVersion version, Path baseDir) throws IOException, InterruptedException {
+    downloadMinecraft(version.getUrl(), baseDir, version.getId());
+  }
+
+  /**
+   * Backward compatibility method - downloads version 1.21
+   */
+  public static void downloadMinecraft(String manifestUrl, Path baseDir) throws IOException, InterruptedException {
+    downloadMinecraft(manifestUrl, baseDir, "1.21");
   }
 
   private static JsonNode fetchJson(String url) throws IOException, InterruptedException {
@@ -163,7 +177,7 @@ public class MinecraftDownloader {
   public static void main(String[] args) throws Exception {
     String manifestUrl = "https://piston-meta.mojang.com/v1/packages/ff7e92039cfb1dca99bad680f278c40edd82f0e1/1.21.json";
     Path baseDir = Path.of("minecraft"); // change to your desired folder
-    downloadMinecraft(manifestUrl, baseDir);
+    downloadMinecraft(manifestUrl, baseDir, "1.21");
   }
 
   private static boolean isLibraryAllowed(JsonNode lib) {
