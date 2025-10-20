@@ -1,4 +1,4 @@
-package com.opencraft;
+package opencraft;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -23,7 +23,8 @@ public class MinecraftDownloader {
   private static final HttpClient client = HttpClient.newHttpClient();
   private static final ObjectMapper mapper = new ObjectMapper();
 
-  public static void downloadMinecraft(String manifestUrl, Path baseDir, String versionId) throws IOException, InterruptedException {
+  public static void downloadMinecraft(String manifestUrl, Path baseDir, String versionId)
+      throws IOException, InterruptedException {
     // Load manifest JSON
     JsonNode root = fetchJson(manifestUrl);
 
@@ -112,7 +113,8 @@ public class MinecraftDownloader {
   /**
    * Downloads a specific Minecraft version using a MinecraftVersion object
    */
-  public static void downloadMinecraft(MinecraftVersionManager.MinecraftVersion version, Path baseDir) throws IOException, InterruptedException {
+  public static void downloadMinecraft(MinecraftVersionManager.MinecraftVersion version, Path baseDir)
+      throws IOException, InterruptedException {
     downloadMinecraft(version.getUrl(), baseDir, version.getId());
   }
 

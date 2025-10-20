@@ -6,7 +6,7 @@
     <modelVersion>4.0.0</modelVersion>
     
     <!-- Project Coordinates -->
-    <groupId>com.opencraft</groupId>
+    <groupId>opencraft</groupId>
     <artifactId>minecraft-launcher</artifactId>
     <version>1.0.0</version>
     <packaging>jar</packaging>
@@ -40,7 +40,7 @@
         <launch4j-maven-plugin.version>2.5.1</launch4j-maven-plugin.version>
         
         <!-- Application Configuration -->
-        <main.class>com.opencraft.OpenCraftLauncher</main.class>
+        <main.class>opencraft.OpenCraftLauncher</main.class>
         <final.name>opencraft-launcher</final.name>
     </properties>
     
@@ -75,6 +75,14 @@
     <!-- Build Configuration -->
     <build>
         <finalName>${final.name}</finalName>
+        
+        <!-- Custom Source Directory Configuration -->
+        <sourceDirectory>src/java</sourceDirectory>
+        <resources>
+            <resource>
+                <directory>src/resources</directory>
+            </resource>
+        </resources>
         
         <!-- Plugin Management -->
         <pluginManagement>
@@ -159,7 +167,8 @@
                             <goal>shade</goal>
                         </goals>
                         <configuration>
-                            <shadedArtifactAttached>true</shadedArtifactAttached>
+                            <finalName>${final.name}-fat</finalName>
+                            <shadedArtifactAttached>false</shadedArtifactAttached>
                             <shadedClassifierName>fat</shadedClassifierName>
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
@@ -225,7 +234,7 @@
                             <goal>java</goal>
                         </goals>
                         <configuration>
-                            <mainClass>com.opencraft.MinecraftDownloader</mainClass>
+                            <mainClass>opencraft.MinecraftDownloader</mainClass>
                         </configuration>
                     </execution>
                     <execution>
@@ -234,7 +243,7 @@
                             <goal>java</goal>
                         </goals>
                         <configuration>
-                            <mainClass>com.opencraft.MinecraftLauncher</mainClass>
+                            <mainClass>opencraft.MinecraftLauncher</mainClass>
                         </configuration>
                     </execution>
                     <execution>
@@ -243,7 +252,7 @@
                             <goal>java</goal>
                         </goals>
                         <configuration>
-                            <mainClass>com.opencraft.MinecraftLauncher</mainClass>
+                            <mainClass>opencraft.MinecraftLauncher</mainClass>
                             <arguments>
                                 <argument>--verify</argument>
                             </arguments>
@@ -279,14 +288,14 @@
                                 </goals>
                                 <configuration>
                                     <headerType>gui</headerType>
-                                    <jar>${project.build.directory}/${project.artifactId}-${project.version}-fat.jar</jar>
+                                    <jar>${project.build.directory}/${final.name}-fat.jar</jar>
                                     <outfile>${project.build.directory}/${final.name}.exe</outfile>
-                                    <downloadUrl>https://adoptium.net/</downloadUrl>
+                                    <!-- <downloadUrl>https://adoptium.net/</downloadUrl> -->
                                     <classPath>
                                         <mainClass>${main.class}</mainClass>
                                         <addDependencies>false</addDependencies>
                                     </classPath>
-                                    <icon>src/main/resources/icon.ico</icon>
+                                    <icon>src/resources/icon.ico</icon>
                                     <jre>
                                         <bundledJre64Bit>false</bundledJre64Bit>
                                         <bundledJreAsFallback>false</bundledJreAsFallback>
@@ -316,15 +325,7 @@
             </build>
         </profile>
         
-        <!-- Development Profile -->
-        <profile>
-            <id>dev</id>
-            <properties>
-                <maven.compiler.debug>true</maven.compiler.debug>
-                <maven.compiler.optimize>false</maven.compiler.optimize>
-            </properties>
-        </profile>
-        
+
         <!-- Production Profile -->
         <profile>
             <id>prod</id>
