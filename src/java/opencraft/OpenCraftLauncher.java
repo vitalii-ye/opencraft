@@ -15,7 +15,7 @@ public class OpenCraftLauncher extends JFrame {
   private static final long serialVersionUID = 1L;
   private JTextField usernameField;
   private JComboBox<String> versionComboBox = new JComboBox<>(new String[] { "1.21", "1.21.10" });
-  private JButton playButton;
+  private JButton playButton = new RoundedButton("Play");
   private JButton downloadButton;
   private JButton refreshVersionsButton;
   private String originalUsername; // Track the original username from file
@@ -47,22 +47,23 @@ public class OpenCraftLauncher extends JFrame {
   private void initializeGUI() {
     setTitle("OpenCraft Launcher");
     setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-    setSize(600, 300);
+    setSize(360, 400);
 
     // Create main panel
     JPanel mainPanel = new JPanel(new BorderLayout());
-    mainPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+    // mainPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+    mainPanel.setBackground(new Color(20, 20, 20));
 
     // Create top panel for user input and buttons
     JPanel topPanel = new JPanel(new GridBagLayout());
     GridBagConstraints gbc = new GridBagConstraints();
+    topPanel.setBackground(new Color(20, 20, 20));
     gbc.insets = new Insets(5, 5, 5, 5);
 
     // Username row
     gbc.gridx = 0;
     gbc.gridy = 0;
     gbc.anchor = GridBagConstraints.WEST;
-    topPanel.add(new JLabel("Username:"), gbc);
     gbc.gridx = 1;
     gbc.fill = GridBagConstraints.HORIZONTAL;
     gbc.weightx = 1.0;
@@ -75,7 +76,6 @@ public class OpenCraftLauncher extends JFrame {
     gbc.anchor = GridBagConstraints.WEST;
     gbc.fill = GridBagConstraints.NONE;
     gbc.weightx = 0;
-    topPanel.add(new JLabel("Version:"), gbc);
     gbc.gridx = 1;
     gbc.fill = GridBagConstraints.HORIZONTAL;
     gbc.weightx = 1.0;
@@ -91,19 +91,31 @@ public class OpenCraftLauncher extends JFrame {
     topPanel.add(versionPanel, gbc);
 
     // Buttons row
-    gbc.gridx = 1;
+    gbc.gridx = 0;
     gbc.gridy = 3;
     gbc.gridwidth = 2;
     gbc.fill = GridBagConstraints.NONE;
+    gbc.anchor = GridBagConstraints.CENTER;
     gbc.weightx = 0;
-    JPanel buttonPanel = new JPanel(new GridLayout(2, 1));
+    gbc.weighty = 1.0; // Allow vertical expansion
+    JPanel buttonPanel = new JPanel();
     buttonPanel.setLayout(new BoxLayout(buttonPanel, BoxLayout.Y_AXIS));
+    buttonPanel.setBackground(new Color(20, 20, 20));
 
-    downloadButton = new JButton("Download");
-    playButton = new JButton("Play");
+    downloadButton = new RoundedButton("Download");
+    playButton = new RoundedButton("Play");
 
+    // Center align both buttons
+    downloadButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+    playButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+    // Add vertical spacing
+    buttonPanel.add(Box.createVerticalGlue());
+    buttonPanel.add(Box.createRigidArea(new Dimension(0, 20)));
     buttonPanel.add(downloadButton);
+    buttonPanel.add(Box.createRigidArea(new Dimension(0, 30)));
     buttonPanel.add(playButton);
+    buttonPanel.add(Box.createVerticalGlue());
     topPanel.add(buttonPanel, gbc);
 
     mainPanel.add(topPanel, BorderLayout.NORTH);
@@ -184,9 +196,9 @@ public class OpenCraftLauncher extends JFrame {
             java.nio.file.Path baseDir = java.nio.file.Path.of("minecraft");
 
             // Find the specific version in the Minecraft version manifest
-            java.util.List<MinecraftVersionManager.MinecraftVersion> versions = 
-                MinecraftVersionManager.fetchAvailableVersions();
-            
+            java.util.List<MinecraftVersionManager.MinecraftVersion> versions = MinecraftVersionManager
+                .fetchAvailableVersions();
+
             MinecraftVersionManager.MinecraftVersion targetVersion = null;
             for (MinecraftVersionManager.MinecraftVersion version : versions) {
               if (version.getId().equals(versionId)) {
@@ -291,7 +303,7 @@ public class OpenCraftLauncher extends JFrame {
         });
         try {
           // Create the file with default user setting
-          String defaultOptions = "username:OpenCitizen\nversionId:1.21.10\n";
+          String defaultOptions = "username:OpenCitizen\nversionId:1.21\n";
           Files.write(opencraftOptions.toPath(), defaultOptions.getBytes());
           SwingUtilities.invokeLater(() -> {
             System.out.println("DEBUG: Created default opencraft_options.txt");
@@ -344,7 +356,7 @@ public class OpenCraftLauncher extends JFrame {
         pb.command(
             "java",
             "-cp", librariesPath + File.pathSeparator + "minecraft/versions/" + versionId + "/" + versionId + ".jar",
-            "-Xmx2G",
+            "-Xmx4G",
             "-Xms1G",
             "-Djava.library.path=minecraft/libraries/natives",
             "-Dfile.encoding=UTF-8",

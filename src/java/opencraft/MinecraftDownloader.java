@@ -118,13 +118,6 @@ public class MinecraftDownloader {
     downloadMinecraft(version.getUrl(), baseDir, version.getId());
   }
 
-  /**
-   * Backward compatibility method - downloads version 1.21
-   */
-  public static void downloadMinecraft(String manifestUrl, Path baseDir) throws IOException, InterruptedException {
-    downloadMinecraft(manifestUrl, baseDir, "1.21");
-  }
-
   private static JsonNode fetchJson(String url) throws IOException, InterruptedException {
     HttpRequest request = HttpRequest.newBuilder(URI.create(url)).GET().build();
     HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
