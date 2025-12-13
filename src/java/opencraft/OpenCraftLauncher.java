@@ -21,6 +21,7 @@ public class OpenCraftLauncher extends JFrame {
   private JButton screenshotsButton;
   private JButton ramUsageButton;
   private String originalUsername; // Track the original username from file
+  private transient Process minecraftProcess = null; // Track the running Minecraft process
 
   /**
    * Gets the platform-specific Minecraft directory
@@ -274,8 +275,10 @@ public class OpenCraftLauncher extends JFrame {
       final String finalUsername = username;
       String versionId = versionComboBox.getSelectedItem().toString();
 
-      // playButton.setEnabled(false);
+      // Disable play button to prevent multiple instances
+      playButton.setEnabled(false);
       playButton.setText("Starting...");
+      downloadButton.setEnabled(false);
 
       // Run minecraft launcher in a separate thread
       SwingWorker<Void, String> worker = new SwingWorker<Void, String>() {
@@ -287,8 +290,15 @@ public class OpenCraftLauncher extends JFrame {
 
         @Override
         protected void done() {
-          playButton.setEnabled(true);
-          playButton.setText("Play");
+          // Only re-enable if process is not running
+          if (minecraftProcess == null || !minecraftProcess.isAlive()) {
+            playButton.setEnabled(true);
+            playButton.setText("Play");
+            downloadButton.setEnabled(true);
+          } else {
+            // Start a background thread to monitor the process
+            monitorMinecraftProcess();
+          }
         }
       };
 
@@ -513,31 +523,62 @@ public class OpenCraftLauncher extends JFrame {
             "--clientId", "dummy");
       }
 
-      // Set working directory to the project root
-      pb.directory(new File("."));
+      // Set working directory to the Minecraft directory (important for world saving)
+      pb.directory(minecraftDir.toFile());
+
+      // On Windows, redirect I/O to prevent process blocking
+      if (osName.contains("win")) {
+        pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+        pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+      } else {
+        pb.inheritIO();
+      }
 
       // Start the process
-      Process process = pb.start();
+      minecraftProcess = pb.start();
 
-      // Wait for process to complete
-      int exitCode = process.waitFor();
+      // Don't wait for process - let it run independently
+      // This prevents the launcher from freezing and allows proper game exit
       SwingUtilities.invokeLater(() -> {
-        System.out.println("DEBUG: Minecraft process exited with code: " + exitCode);
+        System.out.println("DEBUG: Minecraft process started successfully");
+        playButton.setText("Running");
       });
 
-    } catch (
-
-    IOException e) {
+    } catch (IOException e) {
+      minecraftProcess = null;
       SwingUtilities.invokeLater(() -> {
         System.out.println("DEBUG: Error starting Minecraft: " + e.getMessage());
         e.printStackTrace();
+        playButton.setEnabled(true);
+        playButton.setText("Play");
+        downloadButton.setEnabled(true);
       });
-    } catch (InterruptedException e) {
-      SwingUtilities.invokeLater(() -> {
-        System.out.println("DEBUG: Minecraft launch was interrupted: " + e.getMessage());
-      });
-      Thread.currentThread().interrupt();
     }
+  }
+
+  /**
+   * Monitors the Minecraft process in a background thread and re-enables
+   * the Play button when it exits
+   */
+  private void monitorMinecraftProcess() {
+    new Thread(() -> {
+      try {
+        if (minecraftProcess != null && minecraftProcess.isAlive()) {
+          int exitCode = minecraftProcess.waitFor();
+          System.out.println("DEBUG: Minecraft process exited with code: " + exitCode);
+        }
+      } catch (InterruptedException e) {
+        System.out.println("DEBUG: Minecraft monitoring interrupted");
+        Thread.currentThread().interrupt();
+      } finally {
+        minecraftProcess = null;
+        SwingUtilities.invokeLater(() -> {
+          playButton.setEnabled(true);
+          playButton.setText("Play");
+          downloadButton.setEnabled(true);
+        });
+      }
+    }, "Minecraft-Monitor").start();
   }
 
   /**

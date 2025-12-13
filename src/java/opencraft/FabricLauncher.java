@@ -196,10 +196,21 @@ public class FabricLauncher {
     System.out.println("Starting Minecraft " + versionId + "...");
     ProcessBuilder pb = new ProcessBuilder(command);
     pb.directory(new File(gameDir));
-    pb.inheritIO();
+    
+    // On Windows, redirect I/O to prevent process blocking
+    String osName = System.getProperty("os.name").toLowerCase();
+    if (osName.contains("win")) {
+      pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+      pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+    } else {
+      pb.inheritIO();
+    }
+    
     Process process = pb.start();
-    int exitCode = process.waitFor();
-    System.out.println("Minecraft exited with code: " + exitCode);
+    
+    // Don't wait for process - let it run independently
+    // This prevents the launcher from freezing and allows proper game exit
+    System.out.println("Minecraft " + versionId + " started successfully");
   }
 
   private static void checkAndDownloadFabricLibraries(String fabricVersionId, Path baseDir) {
