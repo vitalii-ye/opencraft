@@ -1,7 +1,7 @@
 logs
-minecraft
 target
 .project
 .settings
 .DS_Store
 .classpath
+dependency-reduced-pom.xml

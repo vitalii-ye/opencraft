@@ -18,7 +18,66 @@ public class OpenCraftLauncher extends JFrame {
   private JButton playButton = new RoundedButton("Play");
   private JButton downloadButton;
   private JButton refreshVersionsButton;
+  private JButton screenshotsButton;
+  private JButton ramUsageButton;
   private String originalUsername; // Track the original username from file
+
+  /**
+   * Gets the platform-specific Minecraft directory
+   * On macOS: ~/Library/Application Support/minecraft
+   * On Windows: %appdata%\.minecraft
+   * On Linux: ~/.minecraft
+   */
+  private static Path getMinecraftDirectory() {
+    String osName = System.getProperty("os.name").toLowerCase();
+    String userHome = System.getProperty("user.home");
+    
+    if (osName.contains("mac") || osName.contains("darwin")) {
+      return Paths.get(userHome, "Library", "Application Support", "minecraft");
+    } else if (osName.contains("win")) {
+      String appData = System.getenv("APPDATA");
+      if (appData != null) {
+        return Paths.get(appData, ".minecraft");
+      }
+      return Paths.get(userHome, "AppData", "Roaming", ".minecraft");
+    } else {
+      // Linux and other Unix-like systems
+      return Paths.get(userHome, ".minecraft");
+    }
+  }
+
+  /**
+   * Opens the Minecraft directory in the system's default file explorer
+   */
+  private void openScreenshotsDirectory() {
+    try {
+      String osName = System.getProperty("os.name").toLowerCase();
+      Path screenshotsDir = getMinecraftDirectory().resolve("screenshots");
+      File dirFile = screenshotsDir.toFile();
+
+      // Create directory if it doesn't exist
+      if (!dirFile.exists()) {
+        dirFile.mkdirs();
+      }
+      
+      if (osName.contains("mac") || osName.contains("darwin")) {
+        Runtime.getRuntime().exec(new String[]{"open", screenshotsDir.toString()});
+      } else if (osName.contains("win")) {
+        Runtime.getRuntime().exec(new String[]{"explorer", screenshotsDir.toString()});
+      } else {
+        // Linux - try xdg-open
+        Runtime.getRuntime().exec(new String[]{"xdg-open", screenshotsDir.toString()});
+      }
+    } catch (IOException e) {
+      SwingUtilities.invokeLater(() -> {
+        JOptionPane.showMessageDialog(OpenCraftLauncher.this,
+            "Error opening directory: " + e.getMessage(),
+            "Error",
+            JOptionPane.ERROR_MESSAGE);
+      });
+      e.printStackTrace();
+    }
+  }
 
   @SuppressWarnings("this-escape")
   public OpenCraftLauncher() {
@@ -47,86 +106,153 @@ public class OpenCraftLauncher extends JFrame {
   private void initializeGUI() {
     setTitle("OpenCraft Launcher");
     setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-    setSize(360, 400);
+    setSize(360, 450); // Increased height slightly
 
     // Create main panel
     JPanel mainPanel = new JPanel(new BorderLayout());
-    // mainPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
     mainPanel.setBackground(new Color(20, 20, 20));
+    mainPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
-    // Create top panel for user input and buttons
-    JPanel topPanel = new JPanel(new GridBagLayout());
+    // Content Panel (Center)
+    JPanel contentPanel = new JPanel(new GridBagLayout());
+    contentPanel.setBackground(new Color(20, 20, 20));
     GridBagConstraints gbc = new GridBagConstraints();
-    topPanel.setBackground(new Color(20, 20, 20));
     gbc.insets = new Insets(5, 5, 5, 5);
+    gbc.fill = GridBagConstraints.HORIZONTAL;
 
-    // Username row
+    // Title
+    JLabel titleLabel = new JLabel("OpenCraft Launcher", SwingConstants.CENTER);
+    titleLabel.setForeground(Color.WHITE);
+    titleLabel.setFont(new Font("Arial", Font.BOLD, 24));
     gbc.gridx = 0;
     gbc.gridy = 0;
-    gbc.anchor = GridBagConstraints.WEST;
-    gbc.gridx = 1;
-    gbc.fill = GridBagConstraints.HORIZONTAL;
-    gbc.weightx = 1.0;
-    usernameField = new JTextField("OpenCitizen", 15);
-    topPanel.add(usernameField, gbc);
+    gbc.gridwidth = 2;
+    gbc.insets = new Insets(0, 0, 30, 0);
+    contentPanel.add(titleLabel, gbc);
 
+    // Username row (Hidden in screenshot but likely needed, keeping it but maybe less prominent or just there)
+    // The screenshot doesn't show username field, but I should probably keep it for functionality.
+    // I'll keep it.
+    gbc.gridy = 1;
+    gbc.gridwidth = 1;
+    gbc.insets = new Insets(5, 5, 5, 5);
+    
+    // Username field styling
+    usernameField = new JTextField("OpenCitizen", 15);
+    usernameField.setBackground(new Color(45, 45, 45));
+    usernameField.setForeground(Color.WHITE);
+    usernameField.setCaretColor(Color.WHITE);
+    usernameField.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+    
     // Version row
+    // Combine Username and Version into a cleaner look if possible, or just stack them.
+    // Let's stack them.
+    
+    // Version ComboBox styling
+    versionComboBox.setBackground(new Color(45, 45, 45));
+    versionComboBox.setForeground(Color.WHITE);
+    versionComboBox.setOpaque(true);
+    
+    // Custom renderer to ensure text is visible on all platforms (especially macOS)
+    versionComboBox.setRenderer(new DefaultListCellRenderer() {
+      @Override
+      public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+        super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+        if (isSelected) {
+          setBackground(new Color(76, 175, 80));
+          setForeground(Color.WHITE);
+        } else {
+          setBackground(new Color(45, 45, 45));
+          setForeground(Color.WHITE);
+        }
+        return this;
+      }
+    });
+    
+    JPanel formPanel = new JPanel(new GridLayout(2, 1, 0, 10));
+    formPanel.setBackground(new Color(20, 20, 20));
+    formPanel.add(usernameField);
+    
+    JPanel versionPanel = new JPanel(new BorderLayout());
+    versionPanel.setBackground(new Color(20, 20, 20));
+    
+    refreshVersionsButton = new JButton("↻");
+    refreshVersionsButton.setPreferredSize(new Dimension(30, 30));
+    refreshVersionsButton.setToolTipText("Refresh versions");
+    refreshVersionsButton.setBackground(new Color(45, 45, 45));
+    refreshVersionsButton.setForeground(Color.WHITE);
+    refreshVersionsButton.setBorderPainted(false);
+    refreshVersionsButton.setFocusPainted(false);
+    
+    versionPanel.add(versionComboBox, BorderLayout.CENTER);
+    // versionPanel.add(refreshVersionsButton, BorderLayout.EAST);
+    formPanel.add(versionPanel);
+
     gbc.gridx = 0;
     gbc.gridy = 1;
-    gbc.anchor = GridBagConstraints.WEST;
-    gbc.fill = GridBagConstraints.NONE;
-    gbc.weightx = 0;
-    gbc.gridx = 1;
-    gbc.fill = GridBagConstraints.HORIZONTAL;
-    gbc.weightx = 1.0;
-
-    JPanel versionPanel = new JPanel(new BorderLayout());
-
-    refreshVersionsButton = new JButton("↻");
-    refreshVersionsButton.setPreferredSize(new Dimension(30, 25));
-    refreshVersionsButton.setToolTipText("Refresh versions");
-
-    versionPanel.add(versionComboBox, BorderLayout.CENTER);
-    versionPanel.add(refreshVersionsButton, BorderLayout.EAST);
-    topPanel.add(versionPanel, gbc);
-
-    // Buttons row
-    gbc.gridx = 0;
-    gbc.gridy = 3;
     gbc.gridwidth = 2;
-    gbc.fill = GridBagConstraints.NONE;
-    gbc.anchor = GridBagConstraints.CENTER;
-    gbc.weightx = 0;
-    gbc.weighty = 1.0; // Allow vertical expansion
-    JPanel buttonPanel = new JPanel();
-    buttonPanel.setLayout(new BoxLayout(buttonPanel, BoxLayout.Y_AXIS));
-    buttonPanel.setBackground(new Color(20, 20, 20));
+    gbc.insets = new Insets(0, 0, 20, 0);
+    contentPanel.add(formPanel, gbc);
+
+    // Buttons
+    playButton = new RoundedButton("Play");
+    playButton.setBackground(new Color(76, 175, 80)); // Green
+    playButton.setForeground(Color.WHITE);
+    playButton.setFont(new Font("Arial", Font.BOLD, 20));
+    playButton.setPreferredSize(new Dimension(200, 50));
 
     downloadButton = new RoundedButton("Download");
-    playButton = new RoundedButton("Play");
+    downloadButton.setBackground(new Color(45, 45, 45)); // Dark Grey
+    downloadButton.setForeground(Color.WHITE);
+    downloadButton.setFont(new Font("Arial", Font.PLAIN, 14));
+    downloadButton.setPreferredSize(new Dimension(150, 40));
 
-    // Center align both buttons
-    downloadButton.setAlignmentX(Component.CENTER_ALIGNMENT);
-    playButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+    gbc.gridy = 2;
+    gbc.insets = new Insets(10, 0, 10, 0);
+    gbc.fill = GridBagConstraints.NONE; // Do not stretch buttons
+    contentPanel.add(playButton, gbc);
 
-    // Add vertical spacing
-    buttonPanel.add(Box.createVerticalGlue());
-    buttonPanel.add(Box.createRigidArea(new Dimension(0, 20)));
-    buttonPanel.add(downloadButton);
-    buttonPanel.add(Box.createRigidArea(new Dimension(0, 30)));
-    buttonPanel.add(playButton);
-    buttonPanel.add(Box.createVerticalGlue());
-    topPanel.add(buttonPanel, gbc);
+    gbc.gridy = 3;
+    gbc.insets = new Insets(0, 0, 0, 0);
+    contentPanel.add(downloadButton, gbc);
 
-    mainPanel.add(topPanel, BorderLayout.NORTH);
+    mainPanel.add(contentPanel, BorderLayout.CENTER);
+
+    // Footer Panel (South)
+    JPanel footerPanel = new JPanel(new BorderLayout());
+    footerPanel.setBackground(new Color(20, 20, 20));
+    footerPanel.setBorder(BorderFactory.createEmptyBorder(10, 0, 0, 0));
+
+    screenshotsButton = new JButton("Screenshots");
+    styleTextButton(screenshotsButton);
+    
+    ramUsageButton = new JButton("RAM Usage");
+    styleTextButton(ramUsageButton);
+
+    footerPanel.add(screenshotsButton, BorderLayout.WEST);
+    footerPanel.add(ramUsageButton, BorderLayout.EAST);
+
+    mainPanel.add(footerPanel, BorderLayout.SOUTH);
 
     add(mainPanel);
 
     // Add action listeners
     playButton.addActionListener(new PlayButtonListener());
     downloadButton.addActionListener(new DownloadButtonListener());
+    screenshotsButton.addActionListener(new ScreenshotButtonListener());
+    ramUsageButton.addActionListener(e -> JOptionPane.showMessageDialog(this, "RAM Usage: " + (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) / 1024 / 1024 + "MB / " + Runtime.getRuntime().maxMemory() / 1024 / 1024 + "MB"));
+    
     // Set initial focus
     SwingUtilities.invokeLater(() -> usernameField.requestFocus());
+  }
+
+  private void styleTextButton(JButton btn) {
+    btn.setBorderPainted(false);
+    btn.setFocusPainted(false);
+    btn.setContentAreaFilled(false);
+    btn.setForeground(Color.WHITE);
+    btn.setFont(new Font("Arial", Font.PLAIN, 16));
+    btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
   }
 
   private class PlayButtonListener implements ActionListener {
@@ -193,7 +319,7 @@ public class OpenCraftLauncher extends JFrame {
         protected Void doInBackground() throws Exception {
           try {
             publish("Starting Minecraft " + versionId + " download...");
-            java.nio.file.Path baseDir = java.nio.file.Path.of("minecraft");
+            java.nio.file.Path baseDir = getMinecraftDirectory();
 
             // Find the specific version in the Minecraft version manifest
             java.util.List<MinecraftVersionManager.MinecraftVersion> versions = MinecraftVersionManager
@@ -258,14 +384,23 @@ public class OpenCraftLauncher extends JFrame {
     }
   }
 
+  private class ScreenshotButtonListener implements ActionListener {
+    @Override
+    public void actionPerformed(ActionEvent e) {
+      System.out.println("Screenshot button clicked!");
+      openScreenshotsDirectory();
+    }
+  }
+
   private void launchMinecraft(String username, String versionId) {
     try {
+      Path minecraftDir = getMinecraftDirectory();
 
       // Check if required files exist
-      File librariesFile = new File("minecraft/libraries_" + versionId + ".txt");
-      File opencraftOptions = new File("minecraft/opencraft_options.txt");
-      File minecraftJar = new File("minecraft/versions/" + versionId + "/" + versionId + ".jar");
-      File versionJson = new File("minecraft/versions/" + versionId + "/" + versionId + ".json");
+      File librariesFile = minecraftDir.resolve("libraries_" + versionId + ".txt").toFile();
+      File opencraftOptions = minecraftDir.resolve("opencraft_options.txt").toFile();
+      File minecraftJar = minecraftDir.resolve("versions/" + versionId + "/" + versionId + ".jar").toFile();
+      File versionJson = minecraftDir.resolve("versions/" + versionId + "/" + versionId + ".json").toFile();
 
       if (!librariesFile.exists()) {
         SwingUtilities.invokeLater(() -> {
@@ -318,7 +453,7 @@ public class OpenCraftLauncher extends JFrame {
       }
 
       // Read libraries path
-      String librariesPath = Files.readString(Paths.get("minecraft/libraries_" + versionId + ".txt")).trim();
+      String librariesPath = Files.readString(minecraftDir.resolve("libraries_" + versionId + ".txt")).trim();
 
       // Read version manifest to get asset index
       com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
@@ -332,14 +467,19 @@ public class OpenCraftLauncher extends JFrame {
       String osName = System.getProperty("os.name").toLowerCase();
       boolean isMac = osName.contains("mac") || osName.contains("darwin");
 
+      String minecraftDirStr = minecraftDir.toString();
+      String versionJarPath = minecraftDir.resolve("versions/" + versionId + "/" + versionId + ".jar").toString();
+      String nativesPath = minecraftDir.resolve("libraries/natives").toString();
+      String assetsPath = minecraftDir.resolve("assets").toString();
+
       if (isMac) {
         pb.command(
             "java",
             "-XstartOnFirstThread",
-            "-cp", librariesPath + File.pathSeparator + "minecraft/versions/" + versionId + "/" + versionId + ".jar",
+            "-cp", librariesPath + File.pathSeparator + versionJarPath,
             "-Xmx2G",
             "-Xms1G",
-            "-Djava.library.path=minecraft/libraries/natives",
+            "-Djava.library.path=" + nativesPath,
             "-Dfile.encoding=UTF-8",
             "net.minecraft.client.main.Main",
             "--version", versionId,
@@ -348,17 +488,17 @@ public class OpenCraftLauncher extends JFrame {
             "--username", username,
             "--userType", "legacy",
             "--versionType", "release",
-            "--gameDir", "minecraft",
-            "--assetsDir", "minecraft/assets",
+            "--gameDir", minecraftDirStr,
+            "--assetsDir", assetsPath,
             "--assetIndex", assetIndex,
             "--clientId", "dummy");
       } else {
         pb.command(
             "java",
-            "-cp", librariesPath + File.pathSeparator + "minecraft/versions/" + versionId + "/" + versionId + ".jar",
+            "-cp", librariesPath + File.pathSeparator + versionJarPath,
             "-Xmx4G",
             "-Xms1G",
-            "-Djava.library.path=minecraft/libraries/natives",
+            "-Djava.library.path=" + nativesPath,
             "-Dfile.encoding=UTF-8",
             "net.minecraft.client.main.Main",
             "--version", versionId,
@@ -367,8 +507,8 @@ public class OpenCraftLauncher extends JFrame {
             "--username", username,
             "--userType", "legacy",
             "--versionType", "release",
-            "--gameDir", "minecraft",
-            "--assetsDir", "minecraft/assets",
+            "--gameDir", minecraftDirStr,
+            "--assetsDir", assetsPath,
             "--assetIndex", assetIndex,
             "--clientId", "dummy");
       }
@@ -404,7 +544,7 @@ public class OpenCraftLauncher extends JFrame {
    * Loads username and version from opencraft_options.txt file if it exists
    */
   private void loadUsernameFromOptions() {
-    File optionsFile = new File("minecraft/opencraft_options.txt");
+    File optionsFile = getMinecraftDirectory().resolve("opencraft_options.txt").toFile();
     if (optionsFile.exists()) {
       try {
         String content = Files.readString(optionsFile.toPath()).trim();
@@ -440,7 +580,7 @@ public class OpenCraftLauncher extends JFrame {
    * Saves username and version to opencraft_options.txt file
    */
   private void saveOptionsToFile() {
-    Path optionsPath = Paths.get("minecraft/opencraft_options.txt");
+    Path optionsPath = getMinecraftDirectory().resolve("opencraft_options.txt");
     try {
       Files.createDirectories(optionsPath.getParent());
 
@@ -465,7 +605,7 @@ public class OpenCraftLauncher extends JFrame {
    * Loads the last used version from opencraft_options.txt file
    */
   private String loadLastUsedVersion() {
-    File optionsFile = new File("minecraft/opencraft_options.txt");
+    File optionsFile = getMinecraftDirectory().resolve("opencraft_options.txt").toFile();
     if (optionsFile.exists()) {
       try {
         String content = Files.readString(optionsFile.toPath()).trim();
@@ -489,6 +629,12 @@ public class OpenCraftLauncher extends JFrame {
   }
 
   public static void main(String[] args) {
+    try {
+      // Use CrossPlatformLookAndFeel (Metal) to ensure custom colors are respected on all platforms (especially macOS)
+      UIManager.setLookAndFeel(UIManager.getCrossPlatformLookAndFeelClassName());
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
     SwingUtilities.invokeLater(() -> {
       new OpenCraftLauncher().setVisible(true);
     });
