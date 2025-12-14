@@ -243,7 +243,15 @@ public class OpenCraftLauncher extends JFrame {
       configManager.save();
 
       final String finalUsername = username;
-      String versionId = versionComboBox.getSelectedItem().toString();
+      Object selectedItem = versionComboBox.getSelectedItem();
+      if (selectedItem == null) {
+          JOptionPane.showMessageDialog(OpenCraftLauncher.this,
+              "Please select a Minecraft version first.",
+              "No Version Selected",
+              JOptionPane.WARNING_MESSAGE);
+          return;
+      }
+      String versionId = selectedItem.toString();
 
       // Disable play button to prevent multiple instances
       playButton.setEnabled(false);
@@ -336,6 +344,8 @@ public class OpenCraftLauncher extends JFrame {
         @Override
         protected void process(java.util.List<String> chunks) {
           for (String message : chunks) {
+            downloadButton.setText(message.length() > 20 ? message.substring(0, 17) + "..." : message);
+            // Optionally update a status label or progress bar here
             System.out.println("Download: " + message);
           }
         }
@@ -482,7 +492,7 @@ public class OpenCraftLauncher extends JFrame {
    * the Play button when it exits
    */
   private void monitorMinecraftProcess() {
-    new Thread(() -> {
+    Thread monitorThread = new Thread(() -> {
       try {
         processManager.waitFor();
         System.out.println("DEBUG: Minecraft process exited");
@@ -496,7 +506,9 @@ public class OpenCraftLauncher extends JFrame {
           downloadButton.setEnabled(true);
         });
       }
-    }, "Minecraft-Monitor").start();
+    }, "Minecraft-Monitor");
+    monitorThread.setDaemon(true);
+    monitorThread.start();
   }
 
   /**

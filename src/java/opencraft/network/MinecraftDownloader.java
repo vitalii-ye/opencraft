@@ -185,7 +185,7 @@ public class MinecraftDownloader {
       }
 
       downloaded++;
-      if (downloaded >= 100) {
+      if (downloaded % 100 == 0) {
         log(logger, "Downloaded " + downloaded + "/" + totalAssets + " assets...");
       }
     }
