@@ -1,4 +1,4 @@
-package opencraft;
+package opencraft.network;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -14,9 +14,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import opencraft.network.MinecraftVersionManager;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.Consumer;
 
 public class MinecraftDownloader {
 
@@ -25,6 +27,11 @@ public class MinecraftDownloader {
 
   public static void downloadMinecraft(String manifestUrl, Path baseDir, String versionId)
       throws IOException, InterruptedException {
+      downloadMinecraft(manifestUrl, baseDir, versionId, null);
+  }
+
+  public static void downloadMinecraft(String manifestUrl, Path baseDir, String versionId, Consumer<String> logger)
+      throws IOException, InterruptedException {
     // Load manifest JSON
     JsonNode root = fetchJson(manifestUrl);
 
@@ -32,14 +39,14 @@ public class MinecraftDownloader {
     Path manifestPath = baseDir.resolve("versions/" + versionId + "/" + versionId + ".json");
     Files.createDirectories(manifestPath.getParent());
     mapper.writeValue(manifestPath.toFile(), root);
-    System.out.println("Saved manifest: " + manifestPath);
+    log(logger, "Saved manifest: " + manifestPath);
 
     // Download main client JAR
     JsonNode downloads = root.path("downloads").path("client");
     if (!downloads.isMissingNode()) {
       String jarUrl = downloads.get("url").asText();
       Path jarPath = baseDir.resolve("versions/" + versionId + "/" + versionId + ".jar");
-      downloadFile(jarUrl, jarPath);
+      downloadFile(jarUrl, jarPath, logger);
     }
 
     // Collect library paths for classpath
@@ -58,7 +65,7 @@ public class MinecraftDownloader {
         String libUrl = downloadsNode.get("url").asText();
         String path = downloadsNode.get("path").asText();
         Path libPath = baseDir.resolve("libraries").resolve(path);
-        downloadFile(libUrl, libPath);
+        downloadFile(libUrl, libPath, logger);
         classpathEntries.add(libPath.toString());
       }
 
@@ -73,7 +80,7 @@ public class MinecraftDownloader {
           String libUrl = classifier.get("url").asText();
           String path = classifier.get("path").asText();
           Path libPath = baseDir.resolve("libraries").resolve(path);
-          downloadFile(libUrl, libPath);
+          downloadFile(libUrl, libPath, logger);
         }
 
         // Only add the current platform's native library to classpath
@@ -92,8 +99,8 @@ public class MinecraftDownloader {
     String classpathString = String.join(File.pathSeparator, classpathEntries);
     Files.writeString(librariesTxtPath, classpathString, StandardOpenOption.CREATE,
         StandardOpenOption.TRUNCATE_EXISTING);
-    System.out.println("Created libraries_" + versionId + ".txt with " + classpathEntries.size() + " entries");
-    System.out.println("Using path separator: " + File.pathSeparator);
+    log(logger, "Created libraries_" + versionId + ".txt with " + classpathEntries.size() + " entries");
+    log(logger, "Using path separator: " + File.pathSeparator);
 
     // Download assets index
     JsonNode assetIndex = root.path("assetIndex");
@@ -101,13 +108,13 @@ public class MinecraftDownloader {
       String assetId = assetIndex.get("id").asText();
       String assetUrl = assetIndex.get("url").asText();
       Path assetIndexPath = baseDir.resolve("assets/indexes/" + assetId + ".json");
-      downloadFile(assetUrl, assetIndexPath);
+      downloadFile(assetUrl, assetIndexPath, logger);
 
       // Download actual asset objects
-      downloadAssets(assetIndexPath, baseDir);
+      downloadAssets(assetIndexPath, baseDir, logger);
     }
 
-    System.out.println("All required files downloaded into: " + baseDir.toAbsolutePath());
+    log(logger, "All required files downloaded into: " + baseDir.toAbsolutePath());
   }
 
   /**
@@ -115,7 +122,20 @@ public class MinecraftDownloader {
    */
   public static void downloadMinecraft(MinecraftVersionManager.MinecraftVersion version, Path baseDir)
       throws IOException, InterruptedException {
-    downloadMinecraft(version.getUrl(), baseDir, version.getId());
+    downloadMinecraft(version.getUrl(), baseDir, version.getId(), null);
+  }
+
+  public static void downloadMinecraft(MinecraftVersionManager.MinecraftVersion version, Path baseDir, Consumer<String> logger)
+      throws IOException, InterruptedException {
+    downloadMinecraft(version.getUrl(), baseDir, version.getId(), logger);
+  }
+
+  private static void log(Consumer<String> logger, String message) {
+    if (logger != null) {
+      logger.accept(message);
+    } else {
+      System.out.println(message);
+    }
   }
 
   private static JsonNode fetchJson(String url) throws IOException, InterruptedException {
@@ -125,6 +145,10 @@ public class MinecraftDownloader {
   }
 
   private static void downloadFile(String url, Path dest) throws IOException, InterruptedException {
+      downloadFile(url, dest, null);
+  }
+
+  private static void downloadFile(String url, Path dest, Consumer<String> logger) throws IOException, InterruptedException {
     if (Files.exists(dest))
       return; // skip if already downloaded
     Files.createDirectories(dest.getParent());
@@ -134,11 +158,11 @@ public class MinecraftDownloader {
     try (InputStream in = response.body()) {
       Files.copy(in, dest, StandardCopyOption.REPLACE_EXISTING);
     }
-    System.out.println("Downloaded: " + dest);
+    log(logger, "Downloaded: " + dest);
   }
 
-  private static void downloadAssets(Path assetIndexPath, Path baseDir) throws IOException, InterruptedException {
-    System.out.println("Downloading assets...");
+  private static void downloadAssets(Path assetIndexPath, Path baseDir, Consumer<String> logger) throws IOException, InterruptedException {
+    log(logger, "Downloading assets...");
     JsonNode assetIndex = mapper.readTree(assetIndexPath.toFile());
     JsonNode objects = assetIndex.path("objects");
 
@@ -157,16 +181,16 @@ public class MinecraftDownloader {
 
       if (!Files.exists(assetPath)) {
         String assetUrl = "https://resources.download.minecraft.net/" + hashPrefix + "/" + hash;
-        downloadFile(assetUrl, assetPath);
+        downloadFile(assetUrl, assetPath, logger);
       }
 
       downloaded++;
       if (downloaded >= 100) {
-        System.out.println("Downloaded " + downloaded + "/" + totalAssets + " assets...");
+        log(logger, "Downloaded " + downloaded + "/" + totalAssets + " assets...");
       }
     }
 
-    System.out.println("Downloaded all " + totalAssets + " assets!");
+    log(logger, "Downloaded all " + totalAssets + " assets!");
   }
 
   public static void main(String[] args) throws Exception {

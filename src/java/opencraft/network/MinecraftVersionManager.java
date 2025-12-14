@@ -1,4 +1,4 @@
-package opencraft;
+package opencraft.network;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

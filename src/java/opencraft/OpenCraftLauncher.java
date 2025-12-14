@@ -1,15 +1,23 @@
 package opencraft;
 
+import opencraft.execution.LauncherCommandBuilder;
+import opencraft.execution.ProcessManager;
+import opencraft.network.MinecraftDownloader;
+import opencraft.network.MinecraftVersionManager;
+import opencraft.ui.RoundedButton;
+import opencraft.utils.ConfigurationManager;
+import opencraft.utils.MinecraftPathResolver;
+
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
 
 public class OpenCraftLauncher extends JFrame {
   private static final long serialVersionUID = 1L;
@@ -17,43 +25,18 @@ public class OpenCraftLauncher extends JFrame {
   private JComboBox<String> versionComboBox = new JComboBox<>(new String[] { "1.21", "1.21.10" });
   private JButton playButton = new RoundedButton("Play");
   private JButton downloadButton;
-  private JButton refreshVersionsButton;
   private JButton screenshotsButton;
   private JButton ramUsageButton;
-  private String originalUsername; // Track the original username from file
-  private transient Process minecraftProcess = null; // Track the running Minecraft process
-
-  /**
-   * Gets the platform-specific Minecraft directory
-   * On macOS: ~/Library/Application Support/minecraft
-   * On Windows: %appdata%\.minecraft
-   * On Linux: ~/.minecraft
-   */
-  private static Path getMinecraftDirectory() {
-    String osName = System.getProperty("os.name").toLowerCase();
-    String userHome = System.getProperty("user.home");
-    
-    if (osName.contains("mac") || osName.contains("darwin")) {
-      return Paths.get(userHome, "Library", "Application Support", "minecraft");
-    } else if (osName.contains("win")) {
-      String appData = System.getenv("APPDATA");
-      if (appData != null) {
-        return Paths.get(appData, ".minecraft");
-      }
-      return Paths.get(userHome, "AppData", "Roaming", ".minecraft");
-    } else {
-      // Linux and other Unix-like systems
-      return Paths.get(userHome, ".minecraft");
-    }
-  }
+  
+  private final transient ConfigurationManager configManager;
+  private final transient ProcessManager processManager;
 
   /**
    * Opens the Minecraft directory in the system's default file explorer
    */
   private void openScreenshotsDirectory() {
     try {
-      String osName = System.getProperty("os.name").toLowerCase();
-      Path screenshotsDir = getMinecraftDirectory().resolve("screenshots");
+      Path screenshotsDir = MinecraftPathResolver.getScreenshotsDirectory();
       File dirFile = screenshotsDir.toFile();
 
       // Create directory if it doesn't exist
@@ -61,14 +44,7 @@ public class OpenCraftLauncher extends JFrame {
         dirFile.mkdirs();
       }
       
-      if (osName.contains("mac") || osName.contains("darwin")) {
-        Runtime.getRuntime().exec(new String[]{"open", screenshotsDir.toString()});
-      } else if (osName.contains("win")) {
-        Runtime.getRuntime().exec(new String[]{"explorer", screenshotsDir.toString()});
-      } else {
-        // Linux - try xdg-open
-        Runtime.getRuntime().exec(new String[]{"xdg-open", screenshotsDir.toString()});
-      }
+      Desktop.getDesktop().open(dirFile);
     } catch (IOException e) {
       SwingUtilities.invokeLater(() -> {
         JOptionPane.showMessageDialog(OpenCraftLauncher.this,
@@ -82,9 +58,18 @@ public class OpenCraftLauncher extends JFrame {
 
   @SuppressWarnings("this-escape")
   public OpenCraftLauncher() {
+    this.configManager = new ConfigurationManager();
+    this.processManager = new ProcessManager();
+    
     initializeGUI();
-    loadUsernameFromOptions();
-    String vers = loadLastUsedVersion();
+    loadConfiguration();
+  }
+  
+  private void loadConfiguration() {
+    String username = configManager.getUsername();
+    usernameField.setText(username);
+    
+    String vers = configManager.getLastUsedVersion();
     if (vers != null) {
       System.out.println("DEBUG: Attempting to set version to: " + vers);
       boolean found = false;
@@ -146,9 +131,6 @@ public class OpenCraftLauncher extends JFrame {
     usernameField.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
     
     // Version row
-    // Combine Username and Version into a cleaner look if possible, or just stack them.
-    // Let's stack them.
-    
     // Version ComboBox styling
     versionComboBox.setBackground(new Color(45, 45, 45));
     versionComboBox.setForeground(Color.WHITE);
@@ -177,16 +159,7 @@ public class OpenCraftLauncher extends JFrame {
     JPanel versionPanel = new JPanel(new BorderLayout());
     versionPanel.setBackground(new Color(20, 20, 20));
     
-    refreshVersionsButton = new JButton("↻");
-    refreshVersionsButton.setPreferredSize(new Dimension(30, 30));
-    refreshVersionsButton.setToolTipText("Refresh versions");
-    refreshVersionsButton.setBackground(new Color(45, 45, 45));
-    refreshVersionsButton.setForeground(Color.WHITE);
-    refreshVersionsButton.setBorderPainted(false);
-    refreshVersionsButton.setFocusPainted(false);
-    
     versionPanel.add(versionComboBox, BorderLayout.CENTER);
-    // versionPanel.add(refreshVersionsButton, BorderLayout.EAST);
     formPanel.add(versionPanel);
 
     gbc.gridx = 0;
@@ -265,12 +238,9 @@ public class OpenCraftLauncher extends JFrame {
       }
 
       // Save username and version to options file if they have changed
-      if (!username.equals(originalUsername)) {
-        saveOptionsToFile();
-      } else {
-        // Still save version even if username hasn't changed
-        saveOptionsToFile();
-      }
+      configManager.setUsername(username);
+      configManager.setLastUsedVersion(versionComboBox.getSelectedItem().toString());
+      configManager.save();
 
       final String finalUsername = username;
       String versionId = versionComboBox.getSelectedItem().toString();
@@ -291,7 +261,7 @@ public class OpenCraftLauncher extends JFrame {
         @Override
         protected void done() {
           // Only re-enable if process is not running
-          if (minecraftProcess == null || !minecraftProcess.isAlive()) {
+          if (!processManager.isRunning()) {
             playButton.setEnabled(true);
             playButton.setText("Play");
             downloadButton.setEnabled(true);
@@ -309,17 +279,19 @@ public class OpenCraftLauncher extends JFrame {
   private class DownloadButtonListener implements ActionListener {
     @Override
     public void actionPerformed(ActionEvent e) {
-      String versionId = versionComboBox.getSelectedItem().toString();
-      if (versionId == null) {
+      Object selectedItem = versionComboBox.getSelectedItem();
+      if (selectedItem == null) {
         JOptionPane.showMessageDialog(OpenCraftLauncher.this,
             "Please select a Minecraft version first.",
             "No Version Selected",
             JOptionPane.WARNING_MESSAGE);
         return;
       }
+      String versionId = selectedItem.toString();
 
       // Save selected version to options
-      saveOptionsToFile();
+      configManager.setLastUsedVersion(versionId);
+      configManager.save();
 
       downloadButton.setEnabled(false);
       downloadButton.setText("Downloading...");
@@ -329,7 +301,7 @@ public class OpenCraftLauncher extends JFrame {
         protected Void doInBackground() throws Exception {
           try {
             publish("Starting Minecraft " + versionId + " download...");
-            java.nio.file.Path baseDir = getMinecraftDirectory();
+            java.nio.file.Path baseDir = MinecraftPathResolver.getMinecraftDirectory();
 
             // Find the specific version in the Minecraft version manifest
             java.util.List<MinecraftVersionManager.MinecraftVersion> versions = MinecraftVersionManager
@@ -349,23 +321,8 @@ public class OpenCraftLauncher extends JFrame {
 
             publish("Found version " + versionId + " in manifest, downloading...");
 
-            // Redirect System.out to capture download progress
-            java.io.PrintStream originalOut = System.out;
-            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
-            System.setOut(new java.io.PrintStream(baos));
-
-            MinecraftDownloader.downloadMinecraft(targetVersion, baseDir);
-
-            // Restore original System.out
-            System.setOut(originalOut);
-
-            // Publish the captured output
-            String output = baos.toString();
-            for (String line : output.split("\n")) {
-              if (!line.trim().isEmpty()) {
-                publish(line);
-              }
-            }
+            // Use a custom output stream or callback instead of hijacking System.out
+            MinecraftDownloader.downloadMinecraft(targetVersion, baseDir, this::publish);
 
             publish("Download completed successfully!");
 
@@ -404,11 +361,10 @@ public class OpenCraftLauncher extends JFrame {
 
   private void launchMinecraft(String username, String versionId) {
     try {
-      Path minecraftDir = getMinecraftDirectory();
+      Path minecraftDir = MinecraftPathResolver.getMinecraftDirectory();
 
       // Check if required files exist
       File librariesFile = minecraftDir.resolve("libraries_" + versionId + ".txt").toFile();
-      File opencraftOptions = minecraftDir.resolve("opencraft_options.txt").toFile();
       File minecraftJar = minecraftDir.resolve("versions/" + versionId + "/" + versionId + ".jar").toFile();
       File versionJson = minecraftDir.resolve("versions/" + versionId + "/" + versionId + ".json").toFile();
 
@@ -442,26 +398,6 @@ public class OpenCraftLauncher extends JFrame {
         return;
       }
 
-      if (!opencraftOptions.exists()) {
-        SwingUtilities.invokeLater(() -> {
-          System.out.println("DEBUG: opencraft_options.txt not found, creating with default settings...");
-        });
-        try {
-          // Create the file with default user setting
-          String defaultOptions = "username:OpenCitizen\nversionId:1.21\n";
-          Files.write(opencraftOptions.toPath(), defaultOptions.getBytes());
-          SwingUtilities.invokeLater(() -> {
-            System.out.println("DEBUG: Created default opencraft_options.txt");
-          });
-        } catch (IOException ioException) {
-          SwingUtilities.invokeLater(() -> {
-            System.out.println("DEBUG: Error creating opencraft_options.txt: " +
-                ioException.getMessage());
-          });
-          return;
-        }
-      }
-
       // Read libraries path
       String librariesPath = Files.readString(minecraftDir.resolve("libraries_" + versionId + ".txt")).trim();
 
@@ -471,9 +407,6 @@ public class OpenCraftLauncher extends JFrame {
       String assetIndex = versionManifest.path("assetIndex").path("id").asText();
 
       // Build the command
-      ProcessBuilder pb = new ProcessBuilder();
-
-      // Check if running on macOS and add -XstartOnFirstThread flag
       String osName = System.getProperty("os.name").toLowerCase();
       boolean isMac = osName.contains("mac") || osName.contains("darwin");
 
@@ -481,61 +414,50 @@ public class OpenCraftLauncher extends JFrame {
       String versionJarPath = minecraftDir.resolve("versions/" + versionId + "/" + versionId + ".jar").toString();
       String nativesPath = minecraftDir.resolve("libraries/natives").toString();
       String assetsPath = minecraftDir.resolve("assets").toString();
-
+      
+      LauncherCommandBuilder builder = new LauncherCommandBuilder("net.minecraft.client.main.Main", Paths.get(nativesPath));
+      
       if (isMac) {
-        pb.command(
-            "java",
-            "-XstartOnFirstThread",
-            "-cp", librariesPath + File.pathSeparator + versionJarPath,
-            "-Xmx2G",
-            "-Xms1G",
-            "-Djava.library.path=" + nativesPath,
-            "-Dfile.encoding=UTF-8",
-            "net.minecraft.client.main.Main",
-            "--version", versionId,
-            "--accessToken", "dummy",
-            "--uuid", "0B004000-00E0-00A0-0500-000000700000",
-            "--username", username,
-            "--userType", "legacy",
-            "--versionType", "release",
-            "--gameDir", minecraftDirStr,
-            "--assetsDir", assetsPath,
-            "--assetIndex", assetIndex,
-            "--clientId", "dummy");
+          builder.addJvmArg("-XstartOnFirstThread");
+          builder.addJvmArg("-Xmx4G");
+          builder.addJvmArg("-Xms1G");
       } else {
-        pb.command(
-            "java",
-            "-cp", librariesPath + File.pathSeparator + versionJarPath,
-            "-Xmx4G",
-            "-Xms1G",
-            "-Djava.library.path=" + nativesPath,
-            "-Dfile.encoding=UTF-8",
-            "net.minecraft.client.main.Main",
-            "--version", versionId,
-            "--accessToken", "dummy",
-            "--uuid", "0B004000-00E0-00A0-0500-000000700000",
-            "--username", username,
-            "--userType", "legacy",
-            "--versionType", "release",
-            "--gameDir", minecraftDirStr,
-            "--assetsDir", assetsPath,
-            "--assetIndex", assetIndex,
-            "--clientId", "dummy");
+          builder.addJvmArg("-Xmx4G");
+          builder.addJvmArg("-Xms1G");
       }
+      
+      builder.addJvmArg("-Dfile.encoding=UTF-8");
+      
+      // Add classpath
+      builder.addClasspathEntry(librariesPath);
+      builder.addClasspathEntry(versionJarPath);
+      
+      // Add game args
+      builder.addGameArg("--version");
+      builder.addGameArg(versionId);
+      builder.addGameArg("--accessToken");
+      builder.addGameArg("dummy");
+      builder.addGameArg("--uuid");
+      builder.addGameArg("0B004000-00E0-00A0-0500-000000700000");
+      builder.addGameArg("--username");
+      builder.addGameArg(username);
+      builder.addGameArg("--userType");
+      builder.addGameArg("legacy");
+      builder.addGameArg("--versionType");
+      builder.addGameArg("release");
+      builder.addGameArg("--gameDir");
+      builder.addGameArg(minecraftDirStr);
+      builder.addGameArg("--assetsDir");
+      builder.addGameArg(assetsPath);
+      builder.addGameArg("--assetIndex");
+      builder.addGameArg(assetIndex);
+      builder.addGameArg("--clientId");
+      builder.addGameArg("dummy");
 
-      // Set working directory to the Minecraft directory (important for world saving)
-      pb.directory(minecraftDir.toFile());
-
-      // On Windows, redirect I/O to prevent process blocking
-      if (osName.contains("win")) {
-        pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
-        pb.redirectError(ProcessBuilder.Redirect.INHERIT);
-      } else {
-        pb.inheritIO();
-      }
+      List<String> command = builder.build();
 
       // Start the process
-      minecraftProcess = pb.start();
+      processManager.startProcess(command, line -> System.out.println("MC: " + line));
 
       // Don't wait for process - let it run independently
       // This prevents the launcher from freezing and allows proper game exit
@@ -545,7 +467,6 @@ public class OpenCraftLauncher extends JFrame {
       });
 
     } catch (IOException e) {
-      minecraftProcess = null;
       SwingUtilities.invokeLater(() -> {
         System.out.println("DEBUG: Error starting Minecraft: " + e.getMessage());
         e.printStackTrace();
@@ -563,15 +484,12 @@ public class OpenCraftLauncher extends JFrame {
   private void monitorMinecraftProcess() {
     new Thread(() -> {
       try {
-        if (minecraftProcess != null && minecraftProcess.isAlive()) {
-          int exitCode = minecraftProcess.waitFor();
-          System.out.println("DEBUG: Minecraft process exited with code: " + exitCode);
-        }
+        processManager.waitFor();
+        System.out.println("DEBUG: Minecraft process exited");
       } catch (InterruptedException e) {
         System.out.println("DEBUG: Minecraft monitoring interrupted");
         Thread.currentThread().interrupt();
       } finally {
-        minecraftProcess = null;
         SwingUtilities.invokeLater(() -> {
           playButton.setEnabled(true);
           playButton.setText("Play");
@@ -584,90 +502,6 @@ public class OpenCraftLauncher extends JFrame {
   /**
    * Loads username and version from opencraft_options.txt file if it exists
    */
-  private void loadUsernameFromOptions() {
-    File optionsFile = getMinecraftDirectory().resolve("opencraft_options.txt").toFile();
-    if (optionsFile.exists()) {
-      try {
-        String content = Files.readString(optionsFile.toPath()).trim();
-        String[] lines = content.split("\n");
-
-        for (String line : lines) {
-          if (line.startsWith("username:")) {
-            String username = line.substring("username:".length());
-            originalUsername = username;
-            usernameField.setText(username);
-          }
-        }
-
-        if (originalUsername == null) {
-          // Handle old format - single line with username
-          if (content.startsWith("username:")) {
-            String username = content.substring("username:".length());
-            originalUsername = username;
-            usernameField.setText(username);
-          } else {
-            originalUsername = "OpenCitizen";
-          }
-        }
-      } catch (IOException e) {
-        originalUsername = "OpenCitizen";
-      }
-    } else {
-      originalUsername = "OpenCitizen";
-    }
-  }
-
-  /**
-   * Saves username and version to opencraft_options.txt file
-   */
-  private void saveOptionsToFile() {
-    Path optionsPath = getMinecraftDirectory().resolve("opencraft_options.txt");
-    try {
-      Files.createDirectories(optionsPath.getParent());
-
-      StringBuilder options = new StringBuilder();
-      String username = usernameField.getText().trim();
-      String version = versionComboBox.getSelectedItem().toString();
-
-      options.append("username:").append(username).append("\n");
-      options.append("versionId:").append(version).append("\n");
-
-      System.out.println("DEBUG: Saving username: " + username + ", version: " + version);
-      Files.writeString(optionsPath, options.toString(), StandardCharsets.UTF_8);
-      originalUsername = username;
-      System.out.println("DEBUG: Successfully saved options to file");
-    } catch (IOException e) {
-      System.out.println("DEBUG: Error saving options: " + e.getMessage());
-      e.printStackTrace();
-    }
-  }
-
-  /**
-   * Loads the last used version from opencraft_options.txt file
-   */
-  private String loadLastUsedVersion() {
-    File optionsFile = getMinecraftDirectory().resolve("opencraft_options.txt").toFile();
-    if (optionsFile.exists()) {
-      try {
-        String content = Files.readString(optionsFile.toPath()).trim();
-        String[] lines = content.split("\n");
-
-        for (String line : lines) {
-          if (line.startsWith("versionId:")) {
-            String version = line.substring("versionId:".length());
-            System.out.println("DEBUG: Loaded version from file: " + version);
-            return version;
-          }
-        }
-        System.out.println("DEBUG: No versionId line found in options file");
-      } catch (IOException e) {
-        System.out.println("DEBUG: Error reading options file: " + e.getMessage());
-      }
-    } else {
-      System.out.println("DEBUG: Options file does not exist");
-    }
-    return null; // No saved version
-  }
 
   public static void main(String[] args) {
     try {

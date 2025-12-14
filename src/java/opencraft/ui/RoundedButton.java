@@ -1,4 +1,4 @@
-package opencraft;
+package opencraft.ui;
 
 import javax.swing.*;
 import java.awt.*;
