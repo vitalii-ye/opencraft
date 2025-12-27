@@ -63,6 +63,37 @@ public class MinecraftVersionManager {
   }
 
   /**
+   * Response containing versions and ETag header
+   */
+  public static class VersionResponse {
+    private final List<MinecraftVersion> versions;
+    private final String etag;
+    private final int statusCode;
+
+    public VersionResponse(List<MinecraftVersion> versions, String etag, int statusCode) {
+      this.versions = versions;
+      this.etag = etag;
+      this.statusCode = statusCode;
+    }
+
+    public List<MinecraftVersion> getVersions() {
+      return versions;
+    }
+
+    public String getEtag() {
+      return etag;
+    }
+
+    public int getStatusCode() {
+      return statusCode;
+    }
+
+    public boolean isNotModified() {
+      return statusCode == 304;
+    }
+  }
+
+  /**
    * Fetches all available Minecraft versions from the official manifest
    */
   public static List<MinecraftVersion> fetchAvailableVersions() throws IOException, InterruptedException {
@@ -86,6 +117,47 @@ public class MinecraftVersionManager {
     }
 
     return versions;
+  }
+
+  /**
+   * Fetches versions with ETag support for caching
+   * If etag is provided, includes If-None-Match header
+   */
+  public static VersionResponse fetchAvailableVersionsWithETag(String ifNoneMatch) throws IOException, InterruptedException {
+    HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(URI.create(VERSION_MANIFEST_URL))
+        .GET();
+
+    // Add If-None-Match header if ETag is provided
+    if (ifNoneMatch != null && !ifNoneMatch.isEmpty()) {
+      requestBuilder.header("If-None-Match", ifNoneMatch);
+    }
+
+    HttpRequest request = requestBuilder.build();
+    HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+    // If 304 Not Modified, return empty list with status code
+    if (response.statusCode() == 304) {
+      return new VersionResponse(null, ifNoneMatch, 304);
+    }
+
+    // Parse response
+    JsonNode root = mapper.readTree(response.body());
+    List<MinecraftVersion> versions = new ArrayList<>();
+    JsonNode versionsArray = root.path("versions");
+
+    for (JsonNode versionNode : versionsArray) {
+      String id = versionNode.get("id").asText();
+      String type = versionNode.get("type").asText();
+      String url = versionNode.get("url").asText();
+      String releaseTime = versionNode.get("releaseTime").asText();
+
+      versions.add(new MinecraftVersion(id, type, url, releaseTime));
+    }
+
+    // Get ETag from response headers
+    String etag = response.headers().firstValue("ETag").orElse(null);
+
+    return new VersionResponse(versions, etag, response.statusCode());
   }
 
   /**

@@ -4,6 +4,7 @@ import opencraft.execution.LauncherCommandBuilder;
 import opencraft.execution.ProcessManager;
 import opencraft.network.MinecraftDownloader;
 import opencraft.network.MinecraftVersionManager;
+import opencraft.network.VersionCacheManager;
 import opencraft.ui.RoundedButton;
 import opencraft.utils.ConfigurationManager;
 import opencraft.utils.MinecraftPathResolver;
@@ -22,7 +23,7 @@ import java.util.List;
 public class OpenCraftLauncher extends JFrame {
   private static final long serialVersionUID = 1L;
   private JTextField usernameField;
-  private JComboBox<String> versionComboBox = new JComboBox<>(new String[] { "1.21", "1.21.10" });
+  private JComboBox<String> versionComboBox = new JComboBox<>();
   private JButton playButton = new RoundedButton("Play");
   private JButton downloadButton;
   private JButton screenshotsButton;
@@ -30,6 +31,82 @@ public class OpenCraftLauncher extends JFrame {
   
   private final transient ConfigurationManager configManager;
   private final transient ProcessManager processManager;
+  private final transient VersionCacheManager versionCacheManager;
+  private String lastUsedVersion; // Loaded from config to restore selection
+
+  /**
+   * Checks if a Minecraft version has been downloaded locally.
+   *
+   * @param versionId The Minecraft version ID (e.g., "1.21.10")
+   * @return true if the version is downloaded, false otherwise
+   */
+  private boolean isVersionDownloaded(String versionId) {
+    try {
+      Path minecraftDir = MinecraftPathResolver.getMinecraftDirectory();
+      Path librariesFile = minecraftDir.resolve("libraries_" + versionId + ".txt");
+      return Files.exists(librariesFile);
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
+  /**
+   * Custom renderer for the version combo box that displays version status
+   */
+  private class VersionComboBoxRenderer extends JPanel implements ListCellRenderer<String> {
+    private static final long serialVersionUID = 1L;
+    private final JLabel versionLabel;
+    private final JLabel checkmarkLabel;
+
+    public VersionComboBoxRenderer() {
+      setLayout(new BorderLayout());
+      setOpaque(true);
+
+      versionLabel = new JLabel();
+      versionLabel.setFont(new Font("Arial", Font.PLAIN, 14));
+      versionLabel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 5));
+
+      checkmarkLabel = new JLabel("Downloaded");
+      checkmarkLabel.setFont(new Font("Arial", Font.PLAIN, 10));
+      checkmarkLabel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 10));
+
+      add(versionLabel, BorderLayout.WEST);
+      add(checkmarkLabel, BorderLayout.EAST);
+    }
+
+    @Override
+    public Component getListCellRendererComponent(JList<? extends String> list, String value,
+                                                   int index, boolean isSelected, boolean cellHasFocus) {
+      if (value == null) {
+        versionLabel.setText("");
+        checkmarkLabel.setVisible(false);
+        return this;
+      }
+
+      // Set the version text
+      versionLabel.setText(value);
+
+      // Check if this version is downloaded and show/hide checkmark
+      boolean isDownloaded = isVersionDownloaded(value);
+      checkmarkLabel.setVisible(isDownloaded);
+
+      // Set colors based on selection
+      Color backgroundColor;
+      Color foregroundColor = Color.WHITE;
+
+      if (isSelected) {
+        backgroundColor = new Color(80, 80, 80);
+      } else {
+        backgroundColor = new Color(40, 40, 40);
+      }
+
+      setBackground(backgroundColor);
+      versionLabel.setForeground(foregroundColor);
+      checkmarkLabel.setForeground(foregroundColor);
+
+      return this;
+    }
+  }
 
   /**
    * Opens the Minecraft directory in the system's default file explorer
@@ -60,33 +137,223 @@ public class OpenCraftLauncher extends JFrame {
   public OpenCraftLauncher() {
     this.configManager = new ConfigurationManager();
     this.processManager = new ProcessManager();
-    
+    this.versionCacheManager = new VersionCacheManager();
+
+    // Load last used version early so it can be used when populating combo box
+    this.lastUsedVersion = configManager.getLastUsedVersion();
+
     initializeGUI();
-    loadConfiguration();
+    loadVersions(); // Load versions first (from cache or fetch)
+    loadConfiguration(); // Load username (version is restored in populateVersionComboBox)
   }
   
+  /**
+   * Loads Minecraft versions from cache or fetches them from the server.
+   * Uses hybrid caching approach with TTL and ETag validation.
+   */
+  private void loadVersions() {
+    // Try to load from cache first
+    List<MinecraftVersionManager.MinecraftVersion> cachedVersions = versionCacheManager.getCachedVersions();
+
+    if (cachedVersions != null && !cachedVersions.isEmpty()) {
+      // Cache is valid (within TTL), use it immediately
+      System.out.println("Loading versions from cache (" + cachedVersions.size() + " versions)");
+      populateVersionComboBox(cachedVersions);
+
+      // Don't fetch in background if cache is fresh
+      return;
+    }
+
+    // Cache is expired or doesn't exist, check if we need ETag validation
+    if (versionCacheManager.needsValidation()) {
+      // Cache exists but TTL expired, try to use old cache while validating
+      try {
+        List<MinecraftVersionManager.MinecraftVersion> oldCachedVersions = versionCacheManager.getCachedVersions();
+        if (oldCachedVersions == null) {
+          // Try to read from cache file directly
+          oldCachedVersions = readCacheDirectly();
+        }
+
+        if (oldCachedVersions != null && !oldCachedVersions.isEmpty()) {
+          System.out.println("Loading expired cache while validating (" + oldCachedVersions.size() + " versions)");
+          populateVersionComboBox(oldCachedVersions);
+        }
+      } catch (Exception e) {
+        System.err.println("Error loading expired cache: " + e.getMessage());
+      }
+    }
+
+    // Fetch versions in background
+    fetchVersionsInBackground();
+  }
+
+  /**
+   * Reads cache directly even if expired (for initial UI load)
+   */
+  private List<MinecraftVersionManager.MinecraftVersion> readCacheDirectly() {
+    try {
+      Path cacheFile = MinecraftPathResolver.getMinecraftDirectory().resolve("version_cache.json");
+      if (!Files.exists(cacheFile)) {
+        return null;
+      }
+
+      com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+      com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(cacheFile.toFile());
+
+      List<MinecraftVersionManager.MinecraftVersion> versions = new java.util.ArrayList<>();
+      if (root.isArray()) {
+        for (com.fasterxml.jackson.databind.JsonNode versionNode : root) {
+          String id = versionNode.get("id").asText();
+          String type = versionNode.get("type").asText();
+          String url = versionNode.get("url").asText();
+          String releaseTime = versionNode.get("releaseTime").asText();
+          versions.add(new MinecraftVersionManager.MinecraftVersion(id, type, url, releaseTime));
+        }
+      }
+
+      return versions;
+    } catch (Exception e) {
+      System.err.println("Error reading cache directly: " + e.getMessage());
+      return null;
+    }
+  }
+
+  /**
+   * Fetches versions in background and updates UI when done
+   */
+  private void fetchVersionsInBackground() {
+    SwingWorker<List<MinecraftVersionManager.MinecraftVersion>, Void> worker =
+        new SwingWorker<List<MinecraftVersionManager.MinecraftVersion>, Void>() {
+      @Override
+      protected List<MinecraftVersionManager.MinecraftVersion> doInBackground() throws Exception {
+        try {
+          String storedETag = versionCacheManager.getStoredETag();
+
+          // Fetch with ETag validation
+          MinecraftVersionManager.VersionResponse response =
+              MinecraftVersionManager.fetchAvailableVersionsWithETag(storedETag);
+
+          if (response.isNotModified()) {
+            // Data hasn't changed, update cache timestamp and return cached versions
+            System.out.println("Versions not modified (304), using cache");
+            List<MinecraftVersionManager.MinecraftVersion> cached = readCacheDirectly();
+            if (cached != null) {
+              // Update cache timestamp
+              versionCacheManager.saveToCache(cached, storedETag);
+            }
+            return cached;
+          }
+
+          // Filter release versions only
+          List<MinecraftVersionManager.MinecraftVersion> allVersions = response.getVersions();
+          List<MinecraftVersionManager.MinecraftVersion> releaseVersions = new java.util.ArrayList<>();
+
+          for (MinecraftVersionManager.MinecraftVersion version : allVersions) {
+            if (version.isRelease()) {
+              releaseVersions.add(version);
+            }
+          }
+
+          // Save to cache
+          versionCacheManager.saveToCache(releaseVersions, response.getEtag());
+
+          System.out.println("Fetched " + releaseVersions.size() + " release versions from server");
+          return releaseVersions;
+
+        } catch (IOException | InterruptedException e) {
+          System.err.println("Error fetching versions: " + e.getMessage());
+          e.printStackTrace();
+
+          // Try to use cache as fallback
+          List<MinecraftVersionManager.MinecraftVersion> cached = readCacheDirectly();
+          if (cached != null && !cached.isEmpty()) {
+            System.out.println("Using cached versions as fallback");
+            return cached;
+          }
+
+          throw e;
+        }
+      }
+
+      @Override
+      protected void done() {
+        try {
+          List<MinecraftVersionManager.MinecraftVersion> versions = get();
+          if (versions != null && !versions.isEmpty()) {
+            populateVersionComboBox(versions);
+            System.out.println("Version list updated in UI");
+          }
+        } catch (Exception e) {
+          System.err.println("Failed to update versions: " + e.getMessage());
+
+          // Show error message to user
+          SwingUtilities.invokeLater(() -> {
+            JOptionPane.showMessageDialog(OpenCraftLauncher.this,
+                "Failed to fetch Minecraft versions.\nPlease check your internet connection.\n\n" +
+                "Error: " + e.getMessage(),
+                "Version Fetch Error",
+                JOptionPane.ERROR_MESSAGE);
+          });
+        }
+      }
+    };
+
+    worker.execute();
+  }
+
+  /**
+   * Populates the version combo box with the given versions
+   */
+  private void populateVersionComboBox(List<MinecraftVersionManager.MinecraftVersion> versions) {
+    SwingUtilities.invokeLater(() -> {
+      String currentSelection = (String) versionComboBox.getSelectedItem();
+
+      versionComboBox.removeAllItems();
+
+      for (MinecraftVersionManager.MinecraftVersion version : versions) {
+        versionComboBox.addItem(version.getId());
+      }
+
+      // Prioritize: 1) lastUsedVersion from config, 2) current selection, 3) first item
+      String targetVersion = null;
+
+      // First time loading - use lastUsedVersion from config
+      if (lastUsedVersion != null && currentSelection == null) {
+        targetVersion = lastUsedVersion;
+        System.out.println("Restoring last used version: " + targetVersion);
+      }
+      // Re-populating (e.g., after background refresh) - preserve current selection
+      else if (currentSelection != null) {
+        targetVersion = currentSelection;
+      }
+
+      // Try to select the target version
+      if (targetVersion != null) {
+        for (int i = 0; i < versionComboBox.getItemCount(); i++) {
+          if (versionComboBox.getItemAt(i).equals(targetVersion)) {
+            versionComboBox.setSelectedIndex(i);
+            System.out.println("Successfully set version to: " + targetVersion);
+            return; // Selection successful
+          }
+        }
+        System.out.println("Version " + targetVersion + " not found in available versions");
+      }
+
+      // If no selection or selection not found, select first item
+      if (versionComboBox.getSelectedIndex() == -1 && versionComboBox.getItemCount() > 0) {
+        versionComboBox.setSelectedIndex(0);
+        System.out.println("No matching version found, using first available: " + versionComboBox.getItemAt(0));
+      }
+    });
+  }
+
   private void loadConfiguration() {
+    // Load username
     String username = configManager.getUsername();
     usernameField.setText(username);
     
-    String vers = configManager.getLastUsedVersion();
-    if (vers != null) {
-      System.out.println("DEBUG: Attempting to set version to: " + vers);
-      boolean found = false;
-      for (int i = 0; i < versionComboBox.getItemCount(); i++) {
-        if (versionComboBox.getItemAt(i).equals(vers)) {
-          versionComboBox.setSelectedIndex(i);
-          found = true;
-          System.out.println("DEBUG: Successfully set version to: " + vers);
-          break;
-        }
-      }
-      if (!found) {
-        System.out.println("DEBUG: Version " + vers + " not found in combo box, keeping default");
-      }
-    } else {
-      System.out.println("DEBUG: No version loaded from file, using default");
-    }
+    // Note: Version selection is handled in populateVersionComboBox()
+    // using the lastUsedVersion field loaded in constructor
   }
 
   private void initializeGUI() {
@@ -136,22 +403,9 @@ public class OpenCraftLauncher extends JFrame {
     versionComboBox.setForeground(Color.WHITE);
     versionComboBox.setOpaque(true);
     
-    // Custom renderer to ensure text is visible on all platforms (especially macOS)
-    versionComboBox.setRenderer(new DefaultListCellRenderer() {
-      @Override
-      public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
-        super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
-        if (isSelected) {
-          setBackground(new Color(76, 175, 80));
-          setForeground(Color.WHITE);
-        } else {
-          setBackground(new Color(45, 45, 45));
-          setForeground(Color.WHITE);
-        }
-        return this;
-      }
-    });
-    
+    // Custom renderer to show checkmark for downloaded versions
+    versionComboBox.setRenderer(new VersionComboBoxRenderer());
+
     JPanel formPanel = new JPanel(new GridLayout(2, 1, 0, 10));
     formPanel.setBackground(new Color(20, 20, 20));
     formPanel.add(usernameField);
@@ -354,6 +608,10 @@ public class OpenCraftLauncher extends JFrame {
         protected void done() {
           downloadButton.setEnabled(true);
           downloadButton.setText("Download");
+          List<MinecraftVersionManager.MinecraftVersion> currentVersions = versionCacheManager.getCachedVersions();
+          if (currentVersions != null) {
+            populateVersionComboBox(currentVersions);
+          }
         }
       };
 
@@ -479,6 +737,7 @@ public class OpenCraftLauncher extends JFrame {
     } catch (IOException e) {
       SwingUtilities.invokeLater(() -> {
         System.out.println("DEBUG: Error starting Minecraft: " + e.getMessage());
+
         e.printStackTrace();
         playButton.setEnabled(true);
         playButton.setText("Play");
