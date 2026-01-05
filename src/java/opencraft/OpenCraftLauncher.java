@@ -6,6 +6,7 @@ import opencraft.network.MinecraftDownloader;
 import opencraft.network.MinecraftVersionManager;
 import opencraft.network.VersionCacheManager;
 import opencraft.ui.RoundedButton;
+import opencraft.ui.VersionComboBoxRenderer;
 import opencraft.utils.ConfigurationManager;
 import opencraft.utils.MinecraftPathResolver;
 
@@ -23,8 +24,8 @@ import java.util.List;
 public class OpenCraftLauncher extends JFrame {
   private static final long serialVersionUID = 1L;
   private JTextField usernameField;
-  private JComboBox<String> versionComboBox = new JComboBox<>();
-  private JButton playButton = new RoundedButton("Play");
+  private final JComboBox<String> versionComboBox;
+  private JButton playButton;
   private JButton downloadButton;
   private JButton screenshotsButton;
   private JButton ramUsageButton;
@@ -34,79 +35,6 @@ public class OpenCraftLauncher extends JFrame {
   private final transient VersionCacheManager versionCacheManager;
   private String lastUsedVersion; // Loaded from config to restore selection
 
-  /**
-   * Checks if a Minecraft version has been downloaded locally.
-   *
-   * @param versionId The Minecraft version ID (e.g., "1.21.10")
-   * @return true if the version is downloaded, false otherwise
-   */
-  private boolean isVersionDownloaded(String versionId) {
-    try {
-      Path minecraftDir = MinecraftPathResolver.getMinecraftDirectory();
-      Path librariesFile = minecraftDir.resolve("libraries_" + versionId + ".txt");
-      return Files.exists(librariesFile);
-    } catch (Exception e) {
-      return false;
-    }
-  }
-
-  /**
-   * Custom renderer for the version combo box that displays version status
-   */
-  private class VersionComboBoxRenderer extends JPanel implements ListCellRenderer<String> {
-    private static final long serialVersionUID = 1L;
-    private final JLabel versionLabel;
-    private final JLabel checkmarkLabel;
-
-    public VersionComboBoxRenderer() {
-      setLayout(new BorderLayout());
-      setOpaque(true);
-
-      versionLabel = new JLabel();
-      versionLabel.setFont(new Font("Arial", Font.PLAIN, 14));
-      versionLabel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 5));
-
-      checkmarkLabel = new JLabel("Downloaded");
-      checkmarkLabel.setFont(new Font("Arial", Font.PLAIN, 10));
-      checkmarkLabel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 10));
-
-      add(versionLabel, BorderLayout.WEST);
-      add(checkmarkLabel, BorderLayout.EAST);
-    }
-
-    @Override
-    public Component getListCellRendererComponent(JList<? extends String> list, String value,
-                                                   int index, boolean isSelected, boolean cellHasFocus) {
-      if (value == null) {
-        versionLabel.setText("");
-        checkmarkLabel.setVisible(false);
-        return this;
-      }
-
-      // Set the version text
-      versionLabel.setText(value);
-
-      // Check if this version is downloaded and show/hide checkmark
-      boolean isDownloaded = isVersionDownloaded(value);
-      checkmarkLabel.setVisible(isDownloaded);
-
-      // Set colors based on selection
-      Color backgroundColor;
-      Color foregroundColor = Color.WHITE;
-
-      if (isSelected) {
-        backgroundColor = new Color(80, 80, 80);
-      } else {
-        backgroundColor = new Color(40, 40, 40);
-      }
-
-      setBackground(backgroundColor);
-      versionLabel.setForeground(foregroundColor);
-      checkmarkLabel.setForeground(foregroundColor);
-
-      return this;
-    }
-  }
 
   /**
    * Opens the Minecraft directory in the system's default file explorer
@@ -135,6 +63,8 @@ public class OpenCraftLauncher extends JFrame {
 
   @SuppressWarnings("this-escape")
   public OpenCraftLauncher() {
+    this.versionComboBox = new JComboBox<>();
+    this.playButton = new RoundedButton("Play");
     this.configManager = new ConfigurationManager();
     this.processManager = new ProcessManager();
     this.versionCacheManager = new VersionCacheManager();
@@ -737,7 +667,6 @@ public class OpenCraftLauncher extends JFrame {
     } catch (IOException e) {
       SwingUtilities.invokeLater(() -> {
         System.out.println("DEBUG: Error starting Minecraft: " + e.getMessage());
-
         e.printStackTrace();
         playButton.setEnabled(true);
         playButton.setText("Play");
