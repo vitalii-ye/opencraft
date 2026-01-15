@@ -466,8 +466,8 @@ public class OpenCraftLauncher extends JFrame {
 
       List<String> command = builder.build();
 
-      // Start the process
-      processManager.startProcess(command, line -> System.out.println("MC: " + line));
+      // Start the process with Minecraft directory as working directory
+      processManager.startProcess(command, line -> System.out.println("MC: " + line), minecraftDir.toFile());
 
       // Don't wait for process - let it run independently
       // This prevents the launcher from freezing and allows proper game exit

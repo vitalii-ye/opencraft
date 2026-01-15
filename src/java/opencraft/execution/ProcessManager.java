@@ -1,6 +1,7 @@
 package opencraft.execution;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.List;
@@ -12,6 +13,10 @@ public class ProcessManager {
     private final Object lock = new Object();
 
     public void startProcess(List<String> command, Consumer<String> outputConsumer) throws IOException {
+        startProcess(command, outputConsumer, null);
+    }
+
+    public void startProcess(List<String> command, Consumer<String> outputConsumer, File workingDirectory) throws IOException {
         synchronized (lock) {
             if (process != null && process.isAlive()) {
                 throw new IllegalStateException("Process is already running");
@@ -19,6 +24,9 @@ public class ProcessManager {
 
             ProcessBuilder pb = new ProcessBuilder(command);
             pb.redirectErrorStream(true);
+            if (workingDirectory != null) {
+                pb.directory(workingDirectory);
+            }
             process = pb.start();
 
             // Start a thread to read output
