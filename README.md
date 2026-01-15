@@ -1,13 +1,20 @@
+![Launcher](images/launcher.png)
+
 # OpenCraft - Minecraft Downloader and Launcher
 
-This is opensource lancher for Minecraft
+Open source launcher for Minecraft
+
+## How to play
+1. Install [Java 25](https://www.oracle.com/ua/java/technologies/downloads)
+2. Download launcher
+3. Now you can choose the Minecraft version and play!
 
 ## Features
 - [x] Running preselected Minecraft versions
 - [ ] Support for Fabric mods
 - [ ] Custom skins
 
-## Prerequisites
+## Build from source
 
 - Java 11 or higher
 - Maven 3.6 or higher
