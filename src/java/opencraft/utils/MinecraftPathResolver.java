@@ -38,4 +38,33 @@ public class MinecraftPathResolver {
     public static Path getAssetsDirectory() {
         return getMinecraftDirectory().resolve("assets");
     }
+
+    /**
+     * Returns the mods directory for a specific game version.
+     * Mods are stored per-version to ensure compatibility.
+     */
+    public static Path getModsDirectory(String gameVersion) {
+        return getMinecraftDirectory().resolve("mods").resolve(gameVersion);
+    }
+
+    /**
+     * Returns the active mods directory (used by Minecraft at runtime).
+     */
+    public static Path getModsDirectory() {
+        return getMinecraftDirectory().resolve("mods");
+    }
+
+    /**
+     * Returns the shaderpacks directory.
+     */
+    public static Path getShaderpacksDirectory() {
+        return getMinecraftDirectory().resolve("shaderpacks");
+    }
+
+    /**
+     * Returns the Fabric versions directory.
+     */
+    public static Path getFabricVersionsDirectory() {
+        return getVersionsDirectory();
+    }
 }

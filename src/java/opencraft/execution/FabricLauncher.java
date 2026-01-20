@@ -143,8 +143,17 @@ public class FabricLauncher {
     // Create game directory
     Files.createDirectories(Paths.get(gameDir));
 
+    // Get OS name once for reuse
+    String osName = System.getProperty("os.name").toLowerCase();
+
     List<String> command = new ArrayList<>();
     command.add("java");
+    
+    // On macOS, GLFW requires -XstartOnFirstThread
+    if (osName.contains("mac")) {
+      command.add("-XstartOnFirstThread");
+    }
+    
     command.add("-cp");
     command.add(String.join(File.pathSeparator, classpath));
 
@@ -198,7 +207,6 @@ public class FabricLauncher {
     pb.directory(new File(gameDir));
     
     // On Windows, redirect I/O to prevent process blocking
-    String osName = System.getProperty("os.name").toLowerCase();
     if (osName.contains("win")) {
       pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
       pb.redirectError(ProcessBuilder.Redirect.INHERIT);

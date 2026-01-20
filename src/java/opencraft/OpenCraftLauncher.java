@@ -2,8 +2,13 @@ package opencraft;
 
 import opencraft.execution.LauncherCommandBuilder;
 import opencraft.execution.ProcessManager;
+import opencraft.execution.FabricLauncher;
+import opencraft.mods.ModManager;
+import opencraft.network.FabricDownloader;
+import opencraft.network.FabricVersionManager;
 import opencraft.network.MinecraftDownloader;
 import opencraft.network.MinecraftVersionManager;
+import opencraft.network.MinecraftVersionManager.MinecraftVersion;
 import opencraft.network.VersionCacheManager;
 import opencraft.ui.RoundedButton;
 import opencraft.ui.VersionComboBoxRenderer;
@@ -19,21 +24,27 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
 
 public class OpenCraftLauncher extends JFrame {
   private static final long serialVersionUID = 1L;
   private JTextField usernameField;
-  private final JComboBox<String> versionComboBox;
+  private final JComboBox<MinecraftVersion> versionComboBox;
   private JButton playButton;
   private JButton downloadButton;
   private JButton screenshotsButton;
   private JButton ramUsageButton;
+  private JButton modsButton;
+  private JButton shadersButton;
   
   private final transient ConfigurationManager configManager;
   private final transient ProcessManager processManager;
   private final transient VersionCacheManager versionCacheManager;
   private String lastUsedVersion; // Loaded from config to restore selection
+  
+  // Cache for Fabric loader version
+  private transient String latestFabricLoaderVersion = null;
 
 
   /**
@@ -232,47 +243,71 @@ public class OpenCraftLauncher extends JFrame {
   }
 
   /**
-   * Populates the version combo box with the given versions
+   * Populates the version combo box with both vanilla and Fabric versions.
+   * For each vanilla version, adds a corresponding Fabric version if supported.
    */
   private void populateVersionComboBox(List<MinecraftVersionManager.MinecraftVersion> versions) {
     SwingUtilities.invokeLater(() -> {
-      String currentSelection = (String) versionComboBox.getSelectedItem();
+      MinecraftVersion currentSelection = (MinecraftVersion) versionComboBox.getSelectedItem();
+      String currentSelectionId = currentSelection != null ? currentSelection.getId() : null;
 
       versionComboBox.removeAllItems();
 
+      // Fetch latest Fabric loader version if not cached
+      if (latestFabricLoaderVersion == null) {
+        try {
+          FabricVersionManager.FabricLoaderVersion loader = FabricVersionManager.getLatestStableLoader();
+          if (loader != null) {
+            latestFabricLoaderVersion = loader.getVersion();
+          }
+        } catch (Exception e) {
+          System.err.println("Failed to fetch Fabric loader version: " + e.getMessage());
+        }
+      }
+
+      // Add both vanilla and Fabric versions for each release
       for (MinecraftVersionManager.MinecraftVersion version : versions) {
-        versionComboBox.addItem(version.getId());
+        // Add vanilla version
+        versionComboBox.addItem(version);
+        
+        // Add Fabric version if loader is available
+        if (latestFabricLoaderVersion != null) {
+          MinecraftVersion fabricVersion = version.toFabricVersion(latestFabricLoaderVersion);
+          versionComboBox.addItem(fabricVersion);
+        }
       }
 
       // Prioritize: 1) lastUsedVersion from config, 2) current selection, 3) first item
-      String targetVersion = null;
+      String targetVersionId = null;
 
       // First time loading - use lastUsedVersion from config
-      if (lastUsedVersion != null && currentSelection == null) {
-        targetVersion = lastUsedVersion;
-        System.out.println("Restoring last used version: " + targetVersion);
+      if (lastUsedVersion != null && currentSelectionId == null) {
+        targetVersionId = lastUsedVersion;
+        System.out.println("Restoring last used version: " + targetVersionId);
       }
       // Re-populating (e.g., after background refresh) - preserve current selection
-      else if (currentSelection != null) {
-        targetVersion = currentSelection;
+      else if (currentSelectionId != null) {
+        targetVersionId = currentSelectionId;
       }
 
       // Try to select the target version
-      if (targetVersion != null) {
+      if (targetVersionId != null) {
         for (int i = 0; i < versionComboBox.getItemCount(); i++) {
-          if (versionComboBox.getItemAt(i).equals(targetVersion)) {
+          MinecraftVersion item = versionComboBox.getItemAt(i);
+          if (item.getId().equals(targetVersionId)) {
             versionComboBox.setSelectedIndex(i);
-            System.out.println("Successfully set version to: " + targetVersion);
+            System.out.println("Successfully set version to: " + targetVersionId);
             return; // Selection successful
           }
         }
-        System.out.println("Version " + targetVersion + " not found in available versions");
+        System.out.println("Version " + targetVersionId + " not found in available versions");
       }
 
       // If no selection or selection not found, select first item
       if (versionComboBox.getSelectedIndex() == -1 && versionComboBox.getItemCount() > 0) {
         versionComboBox.setSelectedIndex(0);
-        System.out.println("No matching version found, using first available: " + versionComboBox.getItemAt(0));
+        System.out.println("No matching version found, using first available: " + 
+            versionComboBox.getItemAt(0).getDisplayName());
       }
     });
   }
@@ -374,6 +409,29 @@ public class OpenCraftLauncher extends JFrame {
     gbc.insets = new Insets(0, 0, 0, 0);
     contentPanel.add(downloadButton, gbc);
 
+    // Mods/Shaders buttons panel
+    JPanel modButtonsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 0));
+    modButtonsPanel.setBackground(new Color(20, 20, 20));
+    
+    modsButton = new RoundedButton("Mods");
+    modsButton.setBackground(new Color(63, 81, 181)); // Indigo blue
+    modsButton.setForeground(Color.WHITE);
+    modsButton.setFont(new Font("Arial", Font.PLAIN, 14));
+    modsButton.setPreferredSize(new Dimension(100, 35));
+    
+    shadersButton = new RoundedButton("Shaders");
+    shadersButton.setBackground(new Color(156, 39, 176)); // Purple
+    shadersButton.setForeground(Color.WHITE);
+    shadersButton.setFont(new Font("Arial", Font.PLAIN, 14));
+    shadersButton.setPreferredSize(new Dimension(100, 35));
+    
+    modButtonsPanel.add(modsButton);
+    modButtonsPanel.add(shadersButton);
+    
+    gbc.gridy = 4;
+    gbc.insets = new Insets(15, 0, 0, 0);
+    contentPanel.add(modButtonsPanel, gbc);
+
     mainPanel.add(contentPanel, BorderLayout.CENTER);
 
     // Footer Panel (South)
@@ -399,6 +457,8 @@ public class OpenCraftLauncher extends JFrame {
     downloadButton.addActionListener(new DownloadButtonListener());
     screenshotsButton.addActionListener(new ScreenshotButtonListener());
     ramUsageButton.addActionListener(e -> JOptionPane.showMessageDialog(this, "RAM Usage: " + (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) / 1024 / 1024 + "MB / " + Runtime.getRuntime().maxMemory() / 1024 / 1024 + "MB"));
+    modsButton.addActionListener(e -> openModsDialog());
+    shadersButton.addActionListener(e -> openShadersDialog());
     
     // Set initial focus
     SwingUtilities.invokeLater(() -> usernameField.requestFocus());
@@ -413,6 +473,58 @@ public class OpenCraftLauncher extends JFrame {
     btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
   }
 
+  /**
+   * Opens the mods management dialog.
+   */
+  private void openModsDialog() {
+    MinecraftVersion selectedVersion = (MinecraftVersion) versionComboBox.getSelectedItem();
+    if (selectedVersion == null) {
+      JOptionPane.showMessageDialog(this,
+          "Please select a Minecraft version first.",
+          "No Version Selected",
+          JOptionPane.WARNING_MESSAGE);
+      return;
+    }
+    
+    if (!selectedVersion.isFabric()) {
+      JOptionPane.showMessageDialog(this,
+          "Mods are only supported for Fabric versions.\nPlease select a Fabric version (e.g., \"1.21 [Fabric]\").",
+          "Fabric Required",
+          JOptionPane.WARNING_MESSAGE);
+      return;
+    }
+    
+    // Open mods dialog
+    opencraft.ui.ModsDialog dialog = new opencraft.ui.ModsDialog(this, selectedVersion);
+    dialog.setVisible(true);
+  }
+
+  /**
+   * Opens the shaders management dialog.
+   */
+  private void openShadersDialog() {
+    MinecraftVersion selectedVersion = (MinecraftVersion) versionComboBox.getSelectedItem();
+    if (selectedVersion == null) {
+      JOptionPane.showMessageDialog(this,
+          "Please select a Minecraft version first.",
+          "No Version Selected",
+          JOptionPane.WARNING_MESSAGE);
+      return;
+    }
+    
+    if (!selectedVersion.isFabric()) {
+      JOptionPane.showMessageDialog(this,
+          "Shaders require Fabric with Iris mod.\nPlease select a Fabric version (e.g., \"1.21 [Fabric]\").",
+          "Fabric Required",
+          JOptionPane.WARNING_MESSAGE);
+      return;
+    }
+    
+    // Open shaders dialog
+    opencraft.ui.ShadersDialog dialog = new opencraft.ui.ShadersDialog(this, selectedVersion);
+    dialog.setVisible(true);
+  }
+
   private class PlayButtonListener implements ActionListener {
     @Override
     public void actionPerformed(ActionEvent e) {
@@ -421,21 +533,22 @@ public class OpenCraftLauncher extends JFrame {
         username = "OpenCitizen";
       }
 
-      // Save username and version to options file if they have changed
-      configManager.setUsername(username);
-      configManager.setLastUsedVersion(versionComboBox.getSelectedItem().toString());
-      configManager.save();
-
-      final String finalUsername = username;
-      Object selectedItem = versionComboBox.getSelectedItem();
-      if (selectedItem == null) {
+      MinecraftVersion selectedVersion = (MinecraftVersion) versionComboBox.getSelectedItem();
+      if (selectedVersion == null) {
           JOptionPane.showMessageDialog(OpenCraftLauncher.this,
               "Please select a Minecraft version first.",
               "No Version Selected",
               JOptionPane.WARNING_MESSAGE);
           return;
       }
-      String versionId = selectedItem.toString();
+
+      // Save username and version to options file if they have changed
+      configManager.setUsername(username);
+      configManager.setLastUsedVersion(selectedVersion.getId());
+      configManager.save();
+
+      final String finalUsername = username;
+      final MinecraftVersion finalVersion = selectedVersion;
 
       // Disable play button to prevent multiple instances
       playButton.setEnabled(false);
@@ -446,7 +559,11 @@ public class OpenCraftLauncher extends JFrame {
       SwingWorker<Void, String> worker = new SwingWorker<Void, String>() {
         @Override
         protected Void doInBackground() throws Exception {
-          launchMinecraft(finalUsername, versionId);
+          if (finalVersion.isFabric()) {
+            launchFabricMinecraft(finalUsername, finalVersion);
+          } else {
+            launchMinecraft(finalUsername, finalVersion.getId());
+          }
           return null;
         }
 
@@ -471,52 +588,92 @@ public class OpenCraftLauncher extends JFrame {
   private class DownloadButtonListener implements ActionListener {
     @Override
     public void actionPerformed(ActionEvent e) {
-      Object selectedItem = versionComboBox.getSelectedItem();
-      if (selectedItem == null) {
+      MinecraftVersion selectedVersion = (MinecraftVersion) versionComboBox.getSelectedItem();
+      if (selectedVersion == null) {
         JOptionPane.showMessageDialog(OpenCraftLauncher.this,
             "Please select a Minecraft version first.",
             "No Version Selected",
             JOptionPane.WARNING_MESSAGE);
         return;
       }
-      String versionId = selectedItem.toString();
 
       // Save selected version to options
-      configManager.setLastUsedVersion(versionId);
+      configManager.setLastUsedVersion(selectedVersion.getId());
       configManager.save();
+
+      final MinecraftVersion finalVersion = selectedVersion;
 
       downloadButton.setEnabled(false);
       downloadButton.setText("Downloading...");
+      
       // Run downloader in a separate thread
       SwingWorker<Void, String> worker = new SwingWorker<Void, String>() {
         @Override
         protected Void doInBackground() throws Exception {
           try {
-            publish("Starting Minecraft " + versionId + " download...");
             java.nio.file.Path baseDir = MinecraftPathResolver.getMinecraftDirectory();
 
-            // Find the specific version in the Minecraft version manifest
-            java.util.List<MinecraftVersionManager.MinecraftVersion> versions = MinecraftVersionManager
-                .fetchAvailableVersions();
-
-            MinecraftVersionManager.MinecraftVersion targetVersion = null;
-            for (MinecraftVersionManager.MinecraftVersion version : versions) {
-              if (version.getId().equals(versionId)) {
-                targetVersion = version;
-                break;
+            if (finalVersion.isFabric()) {
+              // Download Fabric version
+              publish("Downloading Fabric " + finalVersion.getBaseGameVersion() + "...");
+              
+              // First, ensure vanilla version is downloaded
+              publish("Checking vanilla " + finalVersion.getBaseGameVersion() + "...");
+              java.nio.file.Path vanillaLibs = baseDir.resolve("libraries_" + finalVersion.getBaseGameVersion() + ".txt");
+              
+              if (!java.nio.file.Files.exists(vanillaLibs)) {
+                // Download vanilla first
+                publish("Downloading vanilla " + finalVersion.getBaseGameVersion() + "...");
+                java.util.List<MinecraftVersionManager.MinecraftVersion> versions = 
+                    MinecraftVersionManager.fetchAvailableVersions();
+                
+                MinecraftVersionManager.MinecraftVersion vanillaVersion = null;
+                for (MinecraftVersionManager.MinecraftVersion v : versions) {
+                  if (v.getId().equals(finalVersion.getBaseGameVersion())) {
+                    vanillaVersion = v;
+                    break;
+                  }
+                }
+                
+                if (vanillaVersion != null) {
+                  MinecraftDownloader.downloadMinecraft(vanillaVersion, baseDir, this::publish);
+                }
               }
+              
+              // Now download Fabric
+              publish("Downloading Fabric loader...");
+              FabricDownloader.downloadFabric(
+                  finalVersion.getBaseGameVersion(), 
+                  finalVersion.getFabricLoaderVersion(), 
+                  this::publish
+              );
+              
+              publish("Fabric download complete!");
+            } else {
+              // Download vanilla version
+              publish("Starting Minecraft " + finalVersion.getId() + " download...");
+
+              // Find the specific version in the Minecraft version manifest
+              java.util.List<MinecraftVersionManager.MinecraftVersion> versions = 
+                  MinecraftVersionManager.fetchAvailableVersions();
+
+              MinecraftVersionManager.MinecraftVersion targetVersion = null;
+              for (MinecraftVersionManager.MinecraftVersion version : versions) {
+                if (version.getId().equals(finalVersion.getId())) {
+                  targetVersion = version;
+                  break;
+                }
+              }
+
+              if (targetVersion == null) {
+                throw new RuntimeException("Version " + finalVersion.getId() + 
+                    " not found in Minecraft version manifest");
+              }
+
+              publish("Found version " + finalVersion.getId() + " in manifest, downloading...");
+              MinecraftDownloader.downloadMinecraft(targetVersion, baseDir, this::publish);
+              publish("Download completed successfully!");
             }
-
-            if (targetVersion == null) {
-              throw new RuntimeException("Version " + versionId + " not found in Minecraft version manifest");
-            }
-
-            publish("Found version " + versionId + " in manifest, downloading...");
-
-            // Use a custom output stream or callback instead of hijacking System.out
-            MinecraftDownloader.downloadMinecraft(targetVersion, baseDir, this::publish);
-
-            publish("Download completed successfully!");
 
           } catch (Exception ex) {
             publish("Error during download: " + ex.getMessage());
@@ -529,7 +686,6 @@ public class OpenCraftLauncher extends JFrame {
         protected void process(java.util.List<String> chunks) {
           for (String message : chunks) {
             downloadButton.setText(message.length() > 20 ? message.substring(0, 17) + "..." : message);
-            // Optionally update a status label or progress bar here
             System.out.println("Download: " + message);
           }
         }
@@ -668,6 +824,98 @@ public class OpenCraftLauncher extends JFrame {
       SwingUtilities.invokeLater(() -> {
         System.out.println("DEBUG: Error starting Minecraft: " + e.getMessage());
         e.printStackTrace();
+        playButton.setEnabled(true);
+        playButton.setText("Play");
+        downloadButton.setEnabled(true);
+      });
+    }
+  }
+
+  /**
+   * Launches Minecraft with Fabric mod loader.
+   * Uses the existing FabricLauncher class for Fabric-specific launch logic.
+   */
+  private void launchFabricMinecraft(String username, MinecraftVersion version) {
+    try {
+      Path minecraftDir = MinecraftPathResolver.getMinecraftDirectory();
+      String fabricVersionId = version.getId();
+      String baseGameVersion = version.getBaseGameVersion();
+
+      // Check if Fabric version is installed
+      File fabricJson = minecraftDir.resolve("versions/" + fabricVersionId + "/" + fabricVersionId + ".json").toFile();
+      File baseLibraries = minecraftDir.resolve("libraries_" + baseGameVersion + ".txt").toFile();
+
+      if (!fabricJson.exists()) {
+        SwingUtilities.invokeLater(() -> {
+          JOptionPane.showMessageDialog(OpenCraftLauncher.this,
+              "Fabric version not found!\nPlease download this version first.",
+              "Files Missing",
+              JOptionPane.ERROR_MESSAGE);
+        });
+        return;
+      }
+
+      if (!baseLibraries.exists()) {
+        SwingUtilities.invokeLater(() -> {
+          JOptionPane.showMessageDialog(OpenCraftLauncher.this,
+              "Vanilla version " + baseGameVersion + " not found!\nPlease download this version first.",
+              "Files Missing",
+              JOptionPane.ERROR_MESSAGE);
+        });
+        return;
+      }
+
+      // Sync version-specific mods to the game mods folder
+      try {
+        Path gameModsDir = minecraftDir.resolve("game/mods");
+        System.out.println("Syncing mods for version " + baseGameVersion + " to: " + gameModsDir);
+        ModManager.syncModsToDirectory(baseGameVersion, gameModsDir, msg -> System.out.println("Mod sync: " + msg));
+      } catch (IOException e) {
+        System.out.println("Warning: Failed to sync mods: " + e.getMessage());
+        // Non-fatal, continue with launch
+      }
+
+      // Sync shaderpacks to the game shaderpacks folder
+      try {
+        Path sourceShaderpacksDir = MinecraftPathResolver.getShaderpacksDirectory();
+        Path gameShaderpacksDir = minecraftDir.resolve("game/shaderpacks");
+        if (Files.exists(sourceShaderpacksDir)) {
+          Files.createDirectories(gameShaderpacksDir);
+          Files.walk(sourceShaderpacksDir)
+               .filter(Files::isRegularFile)
+               .forEach(source -> {
+                 try {
+                   Path dest = gameShaderpacksDir.resolve(sourceShaderpacksDir.relativize(source));
+                   Files.createDirectories(dest.getParent());
+                   Files.copy(source, dest, StandardCopyOption.REPLACE_EXISTING);
+                   System.out.println("Synced shader: " + source.getFileName());
+                 } catch (IOException e) {
+                   System.err.println("Failed to copy shader " + source + ": " + e.getMessage());
+                 }
+               });
+        }
+      } catch (IOException e) {
+        System.out.println("Warning: Failed to sync shaderpacks: " + e.getMessage());
+        // Non-fatal, continue with launch
+      }
+
+      // Use FabricLauncher to launch
+      System.out.println("Launching Fabric version: " + fabricVersionId);
+      FabricLauncher.launchMinecraft(fabricVersionId, username, minecraftDir);
+
+      SwingUtilities.invokeLater(() -> {
+        System.out.println("DEBUG: Fabric Minecraft process started successfully");
+        playButton.setText("Running");
+      });
+
+    } catch (Exception e) {
+      SwingUtilities.invokeLater(() -> {
+        System.out.println("DEBUG: Error starting Fabric Minecraft: " + e.getMessage());
+        e.printStackTrace();
+        JOptionPane.showMessageDialog(OpenCraftLauncher.this,
+            "Error launching Fabric: " + e.getMessage(),
+            "Launch Error",
+            JOptionPane.ERROR_MESSAGE);
         playButton.setEnabled(true);
         playButton.setText("Play");
         downloadButton.setEnabled(true);
