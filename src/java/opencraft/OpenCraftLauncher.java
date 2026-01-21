@@ -867,7 +867,7 @@ public class OpenCraftLauncher extends JFrame {
 
       // Sync version-specific mods to the game mods folder
       try {
-        Path gameModsDir = minecraftDir.resolve("game/mods");
+        Path gameModsDir = minecraftDir.resolve("mods");
         System.out.println("Syncing mods for version " + baseGameVersion + " to: " + gameModsDir);
         ModManager.syncModsToDirectory(baseGameVersion, gameModsDir, msg -> System.out.println("Mod sync: " + msg));
       } catch (IOException e) {
@@ -878,8 +878,9 @@ public class OpenCraftLauncher extends JFrame {
       // Sync shaderpacks to the game shaderpacks folder
       try {
         Path sourceShaderpacksDir = MinecraftPathResolver.getShaderpacksDirectory();
-        Path gameShaderpacksDir = minecraftDir.resolve("game/shaderpacks");
-        if (Files.exists(sourceShaderpacksDir)) {
+        Path gameShaderpacksDir = minecraftDir.resolve("shaderpacks");
+        // When gameDir is root, shaderpacks dir is already correct; skip redundant copy
+        if (Files.exists(sourceShaderpacksDir) && !sourceShaderpacksDir.equals(gameShaderpacksDir)) {
           Files.createDirectories(gameShaderpacksDir);
           Files.walk(sourceShaderpacksDir)
                .filter(Files::isRegularFile)

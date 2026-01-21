@@ -138,7 +138,7 @@ public class FabricLauncher {
 
     // Launch arguments
     String assetsDir = baseDir.resolve("assets").toString();
-    String gameDir = baseDir.resolve("game").toString();
+    String gameDir = baseDir.toString();
 
     // Create game directory
     Files.createDirectories(Paths.get(gameDir));
