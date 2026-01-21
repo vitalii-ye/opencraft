@@ -205,7 +205,8 @@ public class ModrinthApiClient {
         }
         
         if (!facets.isEmpty()) {
-            urlBuilder.append("facets=[").append(String.join(",", facets)).append("]&");
+            String facetsJson = "[" + String.join(",", facets) + "]";
+            urlBuilder.append("facets=").append(URLEncoder.encode(facetsJson, StandardCharsets.UTF_8)).append("&");
         }
         
         urlBuilder.append("limit=").append(limit);
@@ -266,11 +267,13 @@ public class ModrinthApiClient {
                 .append("/version?");
         
         if (gameVersion != null) {
-            urlBuilder.append("game_versions=[\"").append(gameVersion).append("\"]&");
+            String gameVersionsParam = "[\"" + gameVersion + "\"]";
+            urlBuilder.append("game_versions=").append(URLEncoder.encode(gameVersionsParam, StandardCharsets.UTF_8)).append("&");
         }
         
         if (loader != null) {
-            urlBuilder.append("loaders=[\"").append(loader).append("\"]");
+            String loadersParam = "[\"" + loader + "\"]";
+            urlBuilder.append("loaders=").append(URLEncoder.encode(loadersParam, StandardCharsets.UTF_8));
         }
 
         String url = urlBuilder.toString();

@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -13,6 +15,8 @@ import java.net.http.HttpResponse;
 import java.nio.file.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 public class FabricLauncher {
 
@@ -143,65 +147,81 @@ public class FabricLauncher {
     // Create game directory
     Files.createDirectories(Paths.get(gameDir));
 
+    // Extract native libraries
+    // For Fabric versions, we need to extract natives from the base version
+    JsonNode versionForNatives = root;
+    String versionIdForNatives = versionId;
+    
+    if (root.has("inheritsFrom")) {
+      // Use the base version for native library extraction
+      String baseVersion = root.get("inheritsFrom").asText();
+      Path baseVersionJson = baseDir.resolve("versions/" + baseVersion + "/" + baseVersion + ".json");
+      versionForNatives = mapper.readTree(baseVersionJson.toFile());
+      versionIdForNatives = baseVersion;
+    }
+    
+    Path nativesDir = extractNativeLibraries(versionForNatives, baseDir, versionIdForNatives);
+    System.out.println("Natives directory: " + nativesDir);
+
     // Get OS name once for reuse
     String osName = System.getProperty("os.name").toLowerCase();
 
-    List<String> command = new ArrayList<>();
-    command.add("java");
+    // Build command using LauncherCommandBuilder
+    LauncherCommandBuilder builder = new LauncherCommandBuilder(mainClass, nativesDir);
+    
+    // Add classpath entries
+    builder.addClasspathEntries(classpath);
     
     // On macOS, GLFW requires -XstartOnFirstThread
     if (osName.contains("mac")) {
-      command.add("-XstartOnFirstThread");
+      builder.addJvmArg("-XstartOnFirstThread");
     }
     
-    command.add("-cp");
-    command.add(String.join(File.pathSeparator, classpath));
-
-    // JVM arguments (simplified)
-    command.add("-Xmx2G");
-    command.add("-XX:+UnlockExperimentalVMOptions");
-    command.add("-XX:+UseG1GC");
+    // JVM arguments
+    builder.addJvmArg("-Xmx2G");
+    builder.addJvmArg("-XX:+UnlockExperimentalVMOptions");
+    builder.addJvmArg("-XX:+UseG1GC");
 
     // Add Fabric-specific JVM arguments if present
     if (root.has("arguments") && root.path("arguments").has("jvm")) {
       JsonNode jvmArgs = root.path("arguments").path("jvm");
       for (JsonNode arg : jvmArgs) {
         if (arg.isTextual()) {
-          command.add(arg.asText());
+          builder.addJvmArg(arg.asText());
         }
       }
     }
 
-    command.add(mainClass);
-
     // Game arguments
-    command.add("--username");
-    command.add(username);
-    command.add("--version");
-    command.add(versionId);
-    command.add("--gameDir");
-    command.add(gameDir);
-    command.add("--assetsDir");
-    command.add(assetsDir);
-    command.add("--assetIndex");
-    command.add(assetIndexId);
-    command.add("--uuid");
-    command.add("00000000-0000-0000-0000-000000000000");
-    command.add("--accessToken");
-    command.add("0");
-    command.add("--userType");
-    command.add("legacy");
+    builder.addGameArg("--username");
+    builder.addGameArg(username);
+    builder.addGameArg("--version");
+    builder.addGameArg(versionId);
+    builder.addGameArg("--gameDir");
+    builder.addGameArg(gameDir);
+    builder.addGameArg("--assetsDir");
+    builder.addGameArg(assetsDir);
+    builder.addGameArg("--assetIndex");
+    builder.addGameArg(assetIndexId);
+    builder.addGameArg("--uuid");
+    builder.addGameArg("00000000-0000-0000-0000-000000000000");
+    builder.addGameArg("--accessToken");
+    builder.addGameArg("0");
+    builder.addGameArg("--userType");
+    builder.addGameArg("legacy");
 
     // Add Fabric-specific game arguments if present
     if (root.has("arguments") && root.path("arguments").has("game")) {
       JsonNode gameArgs = root.path("arguments").path("game");
       for (JsonNode arg : gameArgs) {
         if (arg.isTextual()) {
-          command.add(arg.asText());
+          builder.addGameArg(arg.asText());
         }
       }
     }
 
+    List<String> command = builder.build();
+    
     System.out.println("Starting Minecraft " + versionId + "...");
     ProcessBuilder pb = new ProcessBuilder(command);
     pb.directory(new File(gameDir));
@@ -484,5 +504,104 @@ public class FabricLauncher {
       return arch.contains("64") ? "natives-linux-x86_64" : "natives-linux-x86";
     }
     return null;
+  }
+
+  /**
+   * Extracts native libraries from JARs to a temporary directory
+   * @param versionRoot The version JSON root node
+   * @param baseDir The Minecraft base directory
+   * @param versionId The version ID
+   * @return Path to the directory containing extracted native libraries
+   */
+  private static Path extractNativeLibraries(JsonNode versionRoot, Path baseDir, String versionId) throws IOException {
+    Path nativesDir = baseDir.resolve("libraries/natives/" + versionId);
+    
+    // Clean and recreate natives directory
+    if (Files.exists(nativesDir)) {
+      deleteDirectory(nativesDir);
+    }
+    Files.createDirectories(nativesDir);
+
+    JsonNode libraries = versionRoot.path("libraries");
+    String nativeKey = getNativeClassifier();
+    
+    if (nativeKey == null) {
+      System.err.println("Warning: Could not determine native classifier for current platform");
+      return nativesDir;
+    }
+
+    System.out.println("Extracting native libraries for: " + nativeKey);
+    
+    for (JsonNode lib : libraries) {
+      // Check if this library is allowed for current OS
+      if (!isLibraryAllowed(lib)) {
+        continue;
+      }
+
+      // Check for native libraries in classifiers
+      JsonNode classifiers = lib.path("downloads").path("classifiers");
+      if (!classifiers.isMissingNode() && classifiers.has(nativeKey)) {
+        JsonNode nativeLib = classifiers.get(nativeKey);
+        String path = nativeLib.get("path").asText();
+        Path nativeJarPath = baseDir.resolve("libraries").resolve(path);
+        
+        if (Files.exists(nativeJarPath)) {
+          System.out.println("Extracting natives from: " + nativeJarPath.getFileName());
+          extractJar(nativeJarPath, nativesDir);
+        } else {
+          System.err.println("Warning: Native library not found: " + nativeJarPath);
+        }
+      }
+    }
+
+    System.out.println("Native libraries extracted to: " + nativesDir);
+    return nativesDir;
+  }
+
+  /**
+   * Extracts all files from a JAR/ZIP file to a target directory
+   */
+  private static void extractJar(Path jarPath, Path targetDir) throws IOException {
+    try (ZipInputStream zis = new ZipInputStream(new FileInputStream(jarPath.toFile()))) {
+      ZipEntry entry;
+      while ((entry = zis.getNextEntry()) != null) {
+        String name = entry.getName();
+        
+        // Skip META-INF and directories
+        if (name.startsWith("META-INF/") || entry.isDirectory()) {
+          continue;
+        }
+        
+        Path targetFile = targetDir.resolve(name);
+        Files.createDirectories(targetFile.getParent());
+        
+        try (FileOutputStream fos = new FileOutputStream(targetFile.toFile())) {
+          byte[] buffer = new byte[8192];
+          int len;
+          while ((len = zis.read(buffer)) > 0) {
+            fos.write(buffer, 0, len);
+          }
+        }
+        
+        zis.closeEntry();
+      }
+    }
+  }
+
+  /**
+   * Recursively deletes a directory
+   */
+  private static void deleteDirectory(Path directory) throws IOException {
+    if (Files.exists(directory)) {
+      Files.walk(directory)
+        .sorted((a, b) -> b.compareTo(a)) // Reverse order to delete files before directories
+        .forEach(path -> {
+          try {
+            Files.delete(path);
+          } catch (IOException e) {
+            System.err.println("Failed to delete: " + path);
+          }
+        });
+    }
   }
 }

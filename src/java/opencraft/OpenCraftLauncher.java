@@ -34,9 +34,7 @@ public class OpenCraftLauncher extends JFrame {
   private JButton playButton;
   private JButton downloadButton;
   private JButton screenshotsButton;
-  private JButton ramUsageButton;
   private JButton modsButton;
-  private JButton shadersButton;
   
   private final transient ConfigurationManager configManager;
   private final transient ProcessManager processManager;
@@ -409,29 +407,6 @@ public class OpenCraftLauncher extends JFrame {
     gbc.insets = new Insets(0, 0, 0, 0);
     contentPanel.add(downloadButton, gbc);
 
-    // Mods/Shaders buttons panel
-    JPanel modButtonsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 0));
-    modButtonsPanel.setBackground(new Color(20, 20, 20));
-    
-    modsButton = new RoundedButton("Mods");
-    modsButton.setBackground(new Color(63, 81, 181)); // Indigo blue
-    modsButton.setForeground(Color.WHITE);
-    modsButton.setFont(new Font("Arial", Font.PLAIN, 14));
-    modsButton.setPreferredSize(new Dimension(100, 35));
-    
-    shadersButton = new RoundedButton("Shaders");
-    shadersButton.setBackground(new Color(156, 39, 176)); // Purple
-    shadersButton.setForeground(Color.WHITE);
-    shadersButton.setFont(new Font("Arial", Font.PLAIN, 14));
-    shadersButton.setPreferredSize(new Dimension(100, 35));
-    
-    modButtonsPanel.add(modsButton);
-    modButtonsPanel.add(shadersButton);
-    
-    gbc.gridy = 4;
-    gbc.insets = new Insets(15, 0, 0, 0);
-    contentPanel.add(modButtonsPanel, gbc);
-
     mainPanel.add(contentPanel, BorderLayout.CENTER);
 
     // Footer Panel (South)
@@ -442,11 +417,11 @@ public class OpenCraftLauncher extends JFrame {
     screenshotsButton = new JButton("Screenshots");
     styleTextButton(screenshotsButton);
     
-    ramUsageButton = new JButton("RAM Usage");
-    styleTextButton(ramUsageButton);
+    modsButton = new JButton("Mods");
+    styleTextButton(modsButton);
 
     footerPanel.add(screenshotsButton, BorderLayout.WEST);
-    footerPanel.add(ramUsageButton, BorderLayout.EAST);
+    footerPanel.add(modsButton, BorderLayout.EAST);
 
     mainPanel.add(footerPanel, BorderLayout.SOUTH);
 
@@ -456,9 +431,7 @@ public class OpenCraftLauncher extends JFrame {
     playButton.addActionListener(new PlayButtonListener());
     downloadButton.addActionListener(new DownloadButtonListener());
     screenshotsButton.addActionListener(new ScreenshotButtonListener());
-    ramUsageButton.addActionListener(e -> JOptionPane.showMessageDialog(this, "RAM Usage: " + (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) / 1024 / 1024 + "MB / " + Runtime.getRuntime().maxMemory() / 1024 / 1024 + "MB"));
-    modsButton.addActionListener(e -> openModsDialog());
-    shadersButton.addActionListener(e -> openShadersDialog());
+    modsButton.addActionListener(e -> openUnifiedModsDialog());
     
     // Set initial focus
     SwingUtilities.invokeLater(() -> usernameField.requestFocus());
@@ -474,9 +447,9 @@ public class OpenCraftLauncher extends JFrame {
   }
 
   /**
-   * Opens the mods management dialog.
+   * Opens the unified mods and shaders management dialog.
    */
-  private void openModsDialog() {
+  private void openUnifiedModsDialog() {
     MinecraftVersion selectedVersion = (MinecraftVersion) versionComboBox.getSelectedItem();
     if (selectedVersion == null) {
       JOptionPane.showMessageDialog(this,
@@ -488,40 +461,14 @@ public class OpenCraftLauncher extends JFrame {
     
     if (!selectedVersion.isFabric()) {
       JOptionPane.showMessageDialog(this,
-          "Mods are only supported for Fabric versions.\nPlease select a Fabric version (e.g., \"1.21 [Fabric]\").",
+          "Mods and shaders are only supported for Fabric versions.\nPlease select a Fabric version (e.g., \"1.21 [Fabric]\").",
           "Fabric Required",
           JOptionPane.WARNING_MESSAGE);
       return;
     }
     
-    // Open mods dialog
-    opencraft.ui.ModsDialog dialog = new opencraft.ui.ModsDialog(this, selectedVersion);
-    dialog.setVisible(true);
-  }
-
-  /**
-   * Opens the shaders management dialog.
-   */
-  private void openShadersDialog() {
-    MinecraftVersion selectedVersion = (MinecraftVersion) versionComboBox.getSelectedItem();
-    if (selectedVersion == null) {
-      JOptionPane.showMessageDialog(this,
-          "Please select a Minecraft version first.",
-          "No Version Selected",
-          JOptionPane.WARNING_MESSAGE);
-      return;
-    }
-    
-    if (!selectedVersion.isFabric()) {
-      JOptionPane.showMessageDialog(this,
-          "Shaders require Fabric with Iris mod.\nPlease select a Fabric version (e.g., \"1.21 [Fabric]\").",
-          "Fabric Required",
-          JOptionPane.WARNING_MESSAGE);
-      return;
-    }
-    
-    // Open shaders dialog
-    opencraft.ui.ShadersDialog dialog = new opencraft.ui.ShadersDialog(this, selectedVersion);
+    // Open unified mods dialog
+    opencraft.ui.UnifiedModsDialog dialog = new opencraft.ui.UnifiedModsDialog(this, selectedVersion);
     dialog.setVisible(true);
   }
 
