@@ -3,6 +3,7 @@ package opencraft.execution;
 import com.fasterxml.jackson.databind.JsonNode;
 import opencraft.network.FabricDownloader;
 import opencraft.utils.MavenCoordinateParser;
+import opencraft.utils.PlatformUtils;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -73,7 +74,7 @@ public class ClasspathBuilder {
         System.out.println("Processing " + libraries.size() + " Fabric libraries...");
 
         for (JsonNode lib : libraries) {
-            if (!isLibraryAllowed(lib)) {
+            if (!PlatformUtils.isLibraryAllowed(lib)) {
                 continue;
             }
 
@@ -127,7 +128,7 @@ public class ClasspathBuilder {
     public ClasspathBuilder addVanillaLibraries(JsonNode versionRoot, Path baseDir) {
         JsonNode libraries = versionRoot.path("libraries");
         for (JsonNode lib : libraries) {
-            if (!isLibraryAllowed(lib)) {
+            if (!PlatformUtils.isLibraryAllowed(lib)) {
                 continue;
             }
 
@@ -156,7 +157,7 @@ public class ClasspathBuilder {
             // Native classifier JARs
             JsonNode classifiers = lib.path("downloads").path("classifiers");
             if (!classifiers.isMissingNode()) {
-                String nativeKey = getNativeClassifier();
+                String nativeKey = PlatformUtils.getNativeClassifier();
                 if (nativeKey != null && classifiers.has(nativeKey)) {
                     String path = classifiers.get(nativeKey).get("path").asText();
                     Path libPath = baseDir.resolve("libraries").resolve(path);
@@ -180,51 +181,5 @@ public class ClasspathBuilder {
     /** Returns an unmodifiable snapshot of the classpath entries collected so far. */
     public List<String> build() {
         return Collections.unmodifiableList(new ArrayList<>(entries));
-    }
-
-    // -------------------------------------------------------------------------
-    // OS / platform helpers (used only for library filtering)
-    // -------------------------------------------------------------------------
-
-    private static boolean isLibraryAllowed(JsonNode lib) {
-        JsonNode rules = lib.path("rules");
-        if (rules.isMissingNode()) {
-            return true;
-        }
-        for (JsonNode rule : rules) {
-            String action = rule.get("action").asText();
-            JsonNode os = rule.path("os");
-            if (os.isMissingNode()) {
-                return "allow".equals(action);
-            } else {
-                String osName = os.path("name").asText();
-                if (matchesCurrentOS(osName)) {
-                    return "allow".equals(action);
-                }
-            }
-        }
-        return true;
-    }
-
-    private static boolean matchesCurrentOS(String osName) {
-        String current = System.getProperty("os.name").toLowerCase();
-        if (current.contains("win") && "windows".equals(osName)) return true;
-        if (current.contains("mac") && "osx".equals(osName)) return true;
-        if (current.contains("nix") || current.contains("nux")) return "linux".equals(osName);
-        return false;
-    }
-
-    private static String getNativeClassifier() {
-        String os = System.getProperty("os.name").toLowerCase();
-        String arch = System.getProperty("os.arch").toLowerCase();
-        if (os.contains("win")) {
-            return arch.contains("64") ? "natives-windows-x86_64" : "natives-windows-x86";
-        } else if (os.contains("mac")) {
-            return arch.contains("aarch64") || arch.contains("arm")
-                    ? "natives-macos-arm64" : "natives-macos-x86_64";
-        } else if (os.contains("nix") || os.contains("nux")) {
-            return arch.contains("64") ? "natives-linux-x86_64" : "natives-linux-x86";
-        }
-        return null;
     }
 }
