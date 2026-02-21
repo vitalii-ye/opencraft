@@ -1,9 +1,10 @@
 package opencraft.mods;
 
 import opencraft.network.ModrinthApiClient;
-import opencraft.network.ModrinthApiClient.ModrinthFile;
-import opencraft.network.ModrinthApiClient.ModrinthProject;
-import opencraft.network.ModrinthApiClient.ModrinthVersion;
+import opencraft.model.ModrinthFile;
+import opencraft.model.ModrinthProject;
+import opencraft.model.ModrinthVersion;
+import opencraft.utils.LogHelper;
 import opencraft.utils.MinecraftPathResolver;
 
 import java.io.IOException;
@@ -24,12 +25,13 @@ public class ShaderManager {
 
     private final Path shaderpacksDir;
     private final ModManager modManager;
+    private final ModrinthApiClient modrinthClient;
 
     /**
      * Creates a ShaderManager using default Minecraft directory paths.
      */
     public ShaderManager() {
-        this(MinecraftPathResolver.getShaderpacksDirectory(), new ModManager());
+        this(MinecraftPathResolver.getShaderpacksDirectory(), new ModManager(), new ModrinthApiClient());
     }
 
     /**
@@ -39,8 +41,20 @@ public class ShaderManager {
      * @param modManager     ModManager instance for Iris/Sodium installation
      */
     public ShaderManager(Path shaderpacksDir, ModManager modManager) {
+        this(shaderpacksDir, modManager, new ModrinthApiClient());
+    }
+
+    /**
+     * Creates a ShaderManager with custom directories and a custom API client for testability.
+     *
+     * @param shaderpacksDir Directory where shader packs are stored
+     * @param modManager     ModManager instance for Iris/Sodium installation
+     * @param modrinthClient Modrinth API client instance
+     */
+    public ShaderManager(Path shaderpacksDir, ModManager modManager, ModrinthApiClient modrinthClient) {
         this.shaderpacksDir = shaderpacksDir;
         this.modManager = modManager;
+        this.modrinthClient = modrinthClient;
     }
 
     /**
@@ -74,32 +88,32 @@ public class ShaderManager {
         
         // Check if Iris is already installed
         if (isIrisInstalled(gameVersion)) {
-            log(logger, "Iris is already installed for " + gameVersion);
+            LogHelper.log(logger, "Iris is already installed for " + gameVersion);
             return true;
         }
 
-        log(logger, "Installing Iris shader mod...");
+        LogHelper.log(logger, "Installing Iris shader mod...");
 
         // First install Sodium (Iris dependency)
         if (!isSodiumInstalled(gameVersion)) {
-            log(logger, "Installing Sodium (Iris dependency)...");
+            LogHelper.log(logger, "Installing Sodium (Iris dependency)...");
             try {
-                ModrinthProject sodiumProject = ModrinthApiClient.getProject(SODIUM_PROJECT_SLUG);
+                ModrinthProject sodiumProject = modrinthClient.getProject(SODIUM_PROJECT_SLUG);
                 modManager.installMod(sodiumProject, gameVersion, logger);
             } catch (Exception e) {
-                log(logger, "Warning: Could not install Sodium: " + e.getMessage());
+                LogHelper.log(logger, "Warning: Could not install Sodium: " + e.getMessage());
                 // Continue anyway, Iris might work without it in some versions
             }
         }
 
         // Install Iris
         try {
-            ModrinthProject irisProject = ModrinthApiClient.getIrisProject();
+            ModrinthProject irisProject = modrinthClient.getIrisProject();
             modManager.installMod(irisProject, gameVersion, logger);
-            log(logger, "Iris installed successfully!");
+            LogHelper.log(logger, "Iris installed successfully!");
             return true;
         } catch (Exception e) {
-            log(logger, "Failed to install Iris: " + e.getMessage());
+            LogHelper.log(logger, "Failed to install Iris: " + e.getMessage());
             return false;
         }
     }
@@ -149,15 +163,15 @@ public class ShaderManager {
             throw new IOException("Failed to install Iris shader mod. Cannot proceed with shader installation.");
         }
 
-        log(logger, "Finding compatible version of " + shaderProject.getTitle() + "...");
+        LogHelper.log(logger, "Finding compatible version of " + shaderProject.getTitle() + "...");
 
         // Get shader versions (shaders don't usually have loader-specific versions)
-        List<ModrinthVersion> versions = ModrinthApiClient.getProjectVersions(
+        List<ModrinthVersion> versions = modrinthClient.getProjectVersions(
                 shaderProject.getId(), gameVersion, null);
 
         // If no version for specific game version, try without version filter
         if (versions.isEmpty()) {
-            versions = ModrinthApiClient.getProjectVersions(shaderProject.getId(), null, null);
+            versions = modrinthClient.getProjectVersions(shaderProject.getId(), null, null);
         }
 
         if (versions.isEmpty()) {
@@ -179,15 +193,15 @@ public class ShaderManager {
 
         // Check if already installed
         if (Files.exists(destination)) {
-            log(logger, shaderProject.getTitle() + " is already installed.");
+            LogHelper.log(logger, shaderProject.getTitle() + " is already installed.");
             return InstalledMod.fromFile(destination, gameVersion, InstalledMod.ModType.SHADER);
         }
 
         // Download the shader
-        log(logger, "Downloading " + shaderProject.getTitle() + " v" + version.getVersionNumber() + "...");
-        ModrinthApiClient.downloadFile(file, destination, logger);
+        LogHelper.log(logger, "Downloading " + shaderProject.getTitle() + " v" + version.getVersionNumber() + "...");
+        modrinthClient.downloadFile(file, destination, logger);
 
-        log(logger, "Installed shader: " + shaderProject.getTitle());
+        LogHelper.log(logger, "Installed shader: " + shaderProject.getTitle());
 
         return InstalledMod.fromFile(destination, gameVersion, InstalledMod.ModType.SHADER);
     }
@@ -201,13 +215,13 @@ public class ShaderManager {
             
             if (Files.exists(filePath)) {
                 Files.delete(filePath);
-                log(logger, "Removed shader: " + shader.getDisplayName());
+                LogHelper.log(logger, "Removed shader: " + shader.getDisplayName());
                 return true;
             }
 
             return false;
         } catch (IOException e) {
-            log(logger, "Failed to remove shader: " + e.getMessage());
+            LogHelper.log(logger, "Failed to remove shader: " + e.getMessage());
             return false;
         }
     }
@@ -217,7 +231,7 @@ public class ShaderManager {
      */
     public List<ModrinthProject> searchShaders(String query, String gameVersion) 
             throws IOException, InterruptedException {
-        return ModrinthApiClient.searchShaders(query, gameVersion, 20);
+        return modrinthClient.searchShaders(query, gameVersion, 20);
     }
 
     /**
@@ -229,11 +243,4 @@ public class ShaderManager {
         return Files.isRegularFile(file) && name.endsWith(".zip");
     }
 
-    private static void log(Consumer<String> logger, String message) {
-        if (logger != null) {
-            logger.accept(message);
-        } else {
-            System.out.println(message);
-        }
-    }
 }

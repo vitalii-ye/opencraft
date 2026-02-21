@@ -3,8 +3,8 @@ package opencraft.ui;
 import opencraft.mods.InstalledMod;
 import opencraft.mods.ModManager;
 import opencraft.mods.ShaderManager;
-import opencraft.network.MinecraftVersionManager.MinecraftVersion;
-import opencraft.network.ModrinthApiClient.ModrinthProject;
+import opencraft.model.MinecraftVersion;
+import opencraft.model.ModrinthProject;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -25,13 +25,7 @@ public class UnifiedModsDialog extends JDialog {
   private final transient ModManager modManager;
   private final transient ShaderManager shaderManager;
 
-  // Colors matching the main launcher theme
-  private static final Color BG_COLOR = new Color(20, 20, 20);
-  private static final Color PANEL_COLOR = new Color(30, 30, 30);
-  private static final Color INPUT_COLOR = new Color(45, 45, 45);
-  private static final Color TEXT_COLOR = Color.WHITE;
-  private static final Color MODS_ACCENT_COLOR = new Color(76, 175, 80); // Green
-  private static final Color SHADERS_ACCENT_COLOR = new Color(156, 39, 176); // Purple
+  // Colors matching the main launcher theme — see Theme.java
 
   @SuppressWarnings({ "this-escape", "serial" })
   public UnifiedModsDialog(Frame parent, MinecraftVersion version) {
@@ -49,15 +43,15 @@ public class UnifiedModsDialog extends JDialog {
   }
 
   private void initializeUI() {
-    setBackground(BG_COLOR);
-    getContentPane().setBackground(BG_COLOR);
+    setBackground(Theme.BG_COLOR);
+    getContentPane().setBackground(Theme.BG_COLOR);
     setLayout(new BorderLayout(10, 10));
     ((JPanel) getContentPane()).setBorder(new EmptyBorder(15, 15, 15, 15));
 
     // Create tabbed pane
     JTabbedPane tabbedPane = new JTabbedPane();
-    tabbedPane.setBackground(BG_COLOR);
-    tabbedPane.setForeground(TEXT_COLOR);
+    tabbedPane.setBackground(Theme.BG_COLOR);
+    tabbedPane.setForeground(Theme.TEXT_COLOR);
     tabbedPane.setFont(new Font("Arial", Font.BOLD, 14));
 
     // Add Mods tab
@@ -77,12 +71,12 @@ public class UnifiedModsDialog extends JDialog {
 
   private JPanel createBottomPanel() {
     JPanel panel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-    panel.setBackground(BG_COLOR);
+    panel.setBackground(Theme.BG_COLOR);
     panel.setBorder(new EmptyBorder(10, 0, 0, 0));
 
     JButton closeButton = new RoundedButton("Close");
-    closeButton.setBackground(INPUT_COLOR);
-    closeButton.setForeground(TEXT_COLOR);
+    closeButton.setBackground(Theme.INPUT_COLOR);
+    closeButton.setForeground(Theme.TEXT_COLOR);
     closeButton.setPreferredSize(new Dimension(100, 35));
     closeButton.addActionListener(e -> dispose());
 
@@ -105,14 +99,14 @@ public class UnifiedModsDialog extends JDialog {
     private JLabel statusLabel;
 
     public ModsTabPanel() {
-      setBackground(BG_COLOR);
+      setBackground(Theme.BG_COLOR);
       setLayout(new BorderLayout(10, 10));
 
       // Create horizontal split pane
       JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
       splitPane.setResizeWeight(0.45);
       splitPane.setDividerLocation(550);
-      splitPane.setBackground(BG_COLOR);
+      splitPane.setBackground(Theme.BG_COLOR);
       splitPane.setBorder(null);
 
       // Left panel - Search
@@ -131,34 +125,34 @@ public class UnifiedModsDialog extends JDialog {
 
     private JPanel createSearchPanel() {
       JPanel panel = new JPanel(new BorderLayout(5, 5));
-      panel.setBackground(PANEL_COLOR);
+      panel.setBackground(Theme.PANEL_COLOR);
       panel.setBorder(BorderFactory.createCompoundBorder(
-          BorderFactory.createLineBorder(new Color(50, 50, 50)),
+          BorderFactory.createLineBorder(Theme.BORDER_COLOR),
           new EmptyBorder(15, 15, 15, 15)));
 
       // Search header
       JLabel titleLabel = new JLabel("Search Modrinth");
-      titleLabel.setForeground(TEXT_COLOR);
+      titleLabel.setForeground(Theme.TEXT_COLOR);
       titleLabel.setFont(new Font("Arial", Font.BOLD, 16));
 
       // Search input area
       JPanel searchInputPanel = new JPanel(new BorderLayout(5, 5));
-      searchInputPanel.setBackground(PANEL_COLOR);
+      searchInputPanel.setBackground(Theme.PANEL_COLOR);
       searchInputPanel.setBorder(new EmptyBorder(10, 0, 10, 0));
 
       searchField = new JTextField();
-      searchField.setBackground(INPUT_COLOR);
-      searchField.setForeground(TEXT_COLOR);
-      searchField.setCaretColor(TEXT_COLOR);
+      searchField.setBackground(Theme.INPUT_COLOR);
+      searchField.setForeground(Theme.TEXT_COLOR);
+      searchField.setCaretColor(Theme.TEXT_COLOR);
       searchField.setBorder(BorderFactory.createCompoundBorder(
-          BorderFactory.createLineBorder(new Color(60, 60, 60)),
+          BorderFactory.createLineBorder(Theme.INPUT_BORDER_COLOR),
           new EmptyBorder(10, 12, 10, 12)));
       searchField.setFont(new Font("Arial", Font.PLAIN, 13));
       searchField.addActionListener(e -> performSearch());
 
       searchButton = new RoundedButton("Search");
-      searchButton.setBackground(MODS_ACCENT_COLOR);
-      searchButton.setForeground(TEXT_COLOR);
+      searchButton.setBackground(Theme.ACCENT_GREEN);
+      searchButton.setForeground(Theme.TEXT_COLOR);
       searchButton.setPreferredSize(new Dimension(100, 40));
       searchButton.addActionListener(e -> performSearch());
 
@@ -167,30 +161,30 @@ public class UnifiedModsDialog extends JDialog {
 
       // Search results
       JLabel resultsLabel = new JLabel("Search Results");
-      resultsLabel.setForeground(new Color(180, 180, 180));
+      resultsLabel.setForeground(Theme.TEXT_MUTED_COLOR);
       resultsLabel.setFont(new Font("Arial", Font.BOLD, 13));
       resultsLabel.setBorder(new EmptyBorder(5, 0, 5, 0));
 
       searchResultsModel = new DefaultListModel<>();
       searchResultsList = new JList<>(searchResultsModel);
-      searchResultsList.setBackground(INPUT_COLOR);
-      searchResultsList.setForeground(TEXT_COLOR);
-      searchResultsList.setSelectionBackground(MODS_ACCENT_COLOR);
+      searchResultsList.setBackground(Theme.INPUT_COLOR);
+      searchResultsList.setForeground(Theme.TEXT_COLOR);
+      searchResultsList.setSelectionBackground(Theme.ACCENT_GREEN);
       searchResultsList.setCellRenderer(new ModrinthProjectRenderer());
 
       JScrollPane scrollPane = new JScrollPane(searchResultsList);
-      scrollPane.setBorder(BorderFactory.createLineBorder(new Color(60, 60, 60)));
-      scrollPane.getViewport().setBackground(INPUT_COLOR);
+      scrollPane.setBorder(BorderFactory.createLineBorder(Theme.INPUT_BORDER_COLOR));
+      scrollPane.getViewport().setBackground(Theme.INPUT_COLOR);
 
       // Install button
       JButton installButton = new RoundedButton("Install Selected");
-      installButton.setBackground(MODS_ACCENT_COLOR);
-      installButton.setForeground(TEXT_COLOR);
+      installButton.setBackground(Theme.ACCENT_GREEN);
+      installButton.setForeground(Theme.TEXT_COLOR);
       installButton.setPreferredSize(new Dimension(150, 35));
       installButton.addActionListener(e -> installSelectedMod());
 
       JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-      buttonPanel.setBackground(PANEL_COLOR);
+      buttonPanel.setBackground(Theme.PANEL_COLOR);
       buttonPanel.setBorder(new EmptyBorder(5, 0, 0, 0));
       buttonPanel.add(installButton);
 
@@ -198,7 +192,7 @@ public class UnifiedModsDialog extends JDialog {
       panel.add(searchInputPanel, BorderLayout.NORTH);
 
       JPanel centerPanel = new JPanel(new BorderLayout(5, 5));
-      centerPanel.setBackground(PANEL_COLOR);
+      centerPanel.setBackground(Theme.PANEL_COLOR);
       centerPanel.add(resultsLabel, BorderLayout.NORTH);
       centerPanel.add(scrollPane, BorderLayout.CENTER);
       centerPanel.add(buttonPanel, BorderLayout.SOUTH);
@@ -210,54 +204,54 @@ public class UnifiedModsDialog extends JDialog {
 
     private JPanel createInstalledPanel() {
       JPanel panel = new JPanel(new BorderLayout(5, 5));
-      panel.setBackground(PANEL_COLOR);
+      panel.setBackground(Theme.PANEL_COLOR);
       panel.setBorder(BorderFactory.createCompoundBorder(
-          BorderFactory.createLineBorder(new Color(50, 50, 50)),
+          BorderFactory.createLineBorder(Theme.BORDER_COLOR),
           new EmptyBorder(15, 15, 15, 15)));
 
       // Header
       JLabel titleLabel = new JLabel("Installed Mods");
-      titleLabel.setForeground(TEXT_COLOR);
+      titleLabel.setForeground(Theme.TEXT_COLOR);
       titleLabel.setFont(new Font("Arial", Font.BOLD, 16));
 
       // Installed mods list
       installedModsModel = new DefaultListModel<>();
       installedModsList = new JList<>(installedModsModel);
-      installedModsList.setBackground(INPUT_COLOR);
-      installedModsList.setForeground(TEXT_COLOR);
-      installedModsList.setSelectionBackground(MODS_ACCENT_COLOR);
+      installedModsList.setBackground(Theme.INPUT_COLOR);
+      installedModsList.setForeground(Theme.TEXT_COLOR);
+      installedModsList.setSelectionBackground(Theme.ACCENT_GREEN);
       installedModsList.setCellRenderer(new InstalledModRenderer());
 
       JScrollPane scrollPane = new JScrollPane(installedModsList);
-      scrollPane.setBorder(BorderFactory.createLineBorder(new Color(60, 60, 60)));
-      scrollPane.getViewport().setBackground(INPUT_COLOR);
+      scrollPane.setBorder(BorderFactory.createLineBorder(Theme.INPUT_BORDER_COLOR));
+      scrollPane.getViewport().setBackground(Theme.INPUT_COLOR);
 
       // Buttons
       JButton removeButton = new RoundedButton("Remove Selected");
-      removeButton.setBackground(new Color(244, 67, 54)); // Red
-      removeButton.setForeground(TEXT_COLOR);
+      removeButton.setBackground(Theme.ACCENT_RED); // Red
+      removeButton.setForeground(Theme.TEXT_COLOR);
       removeButton.setPreferredSize(new Dimension(150, 35));
       removeButton.addActionListener(e -> removeSelectedMod());
 
       JButton refreshButton = new RoundedButton("Refresh");
-      refreshButton.setBackground(new Color(63, 81, 181)); // Indigo
-      refreshButton.setForeground(TEXT_COLOR);
+      refreshButton.setBackground(Theme.ACCENT_INDIGO); // Indigo
+      refreshButton.setForeground(Theme.TEXT_COLOR);
       refreshButton.setPreferredSize(new Dimension(100, 35));
       refreshButton.addActionListener(e -> loadInstalledMods());
 
       JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
-      buttonPanel.setBackground(PANEL_COLOR);
+      buttonPanel.setBackground(Theme.PANEL_COLOR);
       buttonPanel.add(removeButton);
       buttonPanel.add(refreshButton);
 
       // Status label
       statusLabel = new JLabel("Ready");
-      statusLabel.setForeground(new Color(150, 150, 150));
+      statusLabel.setForeground(Theme.TEXT_DIM_COLOR);
       statusLabel.setFont(new Font("Arial", Font.PLAIN, 12));
       statusLabel.setBorder(new EmptyBorder(5, 0, 0, 0));
 
       JPanel bottomPanel = new JPanel(new BorderLayout());
-      bottomPanel.setBackground(PANEL_COLOR);
+      bottomPanel.setBackground(Theme.PANEL_COLOR);
       bottomPanel.add(buttonPanel, BorderLayout.NORTH);
       bottomPanel.add(statusLabel, BorderLayout.SOUTH);
 
@@ -423,14 +417,14 @@ public class UnifiedModsDialog extends JDialog {
     private JLabel irisStatusLabel;
 
     public ShadersTabPanel() {
-      setBackground(BG_COLOR);
+      setBackground(Theme.BG_COLOR);
       setLayout(new BorderLayout(10, 10));
 
       // Create horizontal split pane
       JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
       splitPane.setResizeWeight(0.45);
       splitPane.setDividerLocation(550);
-      splitPane.setBackground(BG_COLOR);
+      splitPane.setBackground(Theme.BG_COLOR);
       splitPane.setBorder(null);
 
       // Left panel - Search
@@ -450,34 +444,34 @@ public class UnifiedModsDialog extends JDialog {
 
     private JPanel createSearchPanel() {
       JPanel panel = new JPanel(new BorderLayout(5, 5));
-      panel.setBackground(PANEL_COLOR);
+      panel.setBackground(Theme.PANEL_COLOR);
       panel.setBorder(BorderFactory.createCompoundBorder(
-          BorderFactory.createLineBorder(new Color(50, 50, 50)),
+          BorderFactory.createLineBorder(Theme.BORDER_COLOR),
           new EmptyBorder(15, 15, 15, 15)));
 
       // Search header
       JLabel titleLabel = new JLabel("Search Shaders");
-      titleLabel.setForeground(TEXT_COLOR);
+      titleLabel.setForeground(Theme.TEXT_COLOR);
       titleLabel.setFont(new Font("Arial", Font.BOLD, 16));
 
       // Search input area
       JPanel searchInputPanel = new JPanel(new BorderLayout(5, 5));
-      searchInputPanel.setBackground(PANEL_COLOR);
+      searchInputPanel.setBackground(Theme.PANEL_COLOR);
       searchInputPanel.setBorder(new EmptyBorder(10, 0, 10, 0));
 
       searchField = new JTextField();
-      searchField.setBackground(INPUT_COLOR);
-      searchField.setForeground(TEXT_COLOR);
-      searchField.setCaretColor(TEXT_COLOR);
+      searchField.setBackground(Theme.INPUT_COLOR);
+      searchField.setForeground(Theme.TEXT_COLOR);
+      searchField.setCaretColor(Theme.TEXT_COLOR);
       searchField.setBorder(BorderFactory.createCompoundBorder(
-          BorderFactory.createLineBorder(new Color(60, 60, 60)),
+          BorderFactory.createLineBorder(Theme.INPUT_BORDER_COLOR),
           new EmptyBorder(10, 12, 10, 12)));
       searchField.setFont(new Font("Arial", Font.PLAIN, 13));
       searchField.addActionListener(e -> performSearch());
 
       searchButton = new RoundedButton("Search");
-      searchButton.setBackground(SHADERS_ACCENT_COLOR);
-      searchButton.setForeground(TEXT_COLOR);
+      searchButton.setBackground(Theme.ACCENT_PURPLE);
+      searchButton.setForeground(Theme.TEXT_COLOR);
       searchButton.setPreferredSize(new Dimension(100, 40));
       searchButton.addActionListener(e -> performSearch());
 
@@ -486,30 +480,30 @@ public class UnifiedModsDialog extends JDialog {
 
       // Search results
       JLabel resultsLabel = new JLabel("Available Shaders");
-      resultsLabel.setForeground(new Color(180, 180, 180));
+      resultsLabel.setForeground(Theme.TEXT_MUTED_COLOR);
       resultsLabel.setFont(new Font("Arial", Font.BOLD, 13));
       resultsLabel.setBorder(new EmptyBorder(5, 0, 5, 0));
 
       searchResultsModel = new DefaultListModel<>();
       searchResultsList = new JList<>(searchResultsModel);
-      searchResultsList.setBackground(INPUT_COLOR);
-      searchResultsList.setForeground(TEXT_COLOR);
-      searchResultsList.setSelectionBackground(SHADERS_ACCENT_COLOR);
+      searchResultsList.setBackground(Theme.INPUT_COLOR);
+      searchResultsList.setForeground(Theme.TEXT_COLOR);
+      searchResultsList.setSelectionBackground(Theme.ACCENT_PURPLE);
       searchResultsList.setCellRenderer(new ModrinthProjectRenderer());
 
       JScrollPane scrollPane = new JScrollPane(searchResultsList);
-      scrollPane.setBorder(BorderFactory.createLineBorder(new Color(60, 60, 60)));
-      scrollPane.getViewport().setBackground(INPUT_COLOR);
+      scrollPane.setBorder(BorderFactory.createLineBorder(Theme.INPUT_BORDER_COLOR));
+      scrollPane.getViewport().setBackground(Theme.INPUT_COLOR);
 
       // Install button
       JButton installButton = new RoundedButton("Install Selected");
-      installButton.setBackground(SHADERS_ACCENT_COLOR);
-      installButton.setForeground(TEXT_COLOR);
+      installButton.setBackground(Theme.ACCENT_PURPLE);
+      installButton.setForeground(Theme.TEXT_COLOR);
       installButton.setPreferredSize(new Dimension(150, 35));
       installButton.addActionListener(e -> installSelectedShader());
 
       JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-      buttonPanel.setBackground(PANEL_COLOR);
+      buttonPanel.setBackground(Theme.PANEL_COLOR);
       buttonPanel.setBorder(new EmptyBorder(5, 0, 0, 0));
       buttonPanel.add(installButton);
 
@@ -517,7 +511,7 @@ public class UnifiedModsDialog extends JDialog {
       panel.add(searchInputPanel, BorderLayout.NORTH);
 
       JPanel centerPanel = new JPanel(new BorderLayout(5, 5));
-      centerPanel.setBackground(PANEL_COLOR);
+      centerPanel.setBackground(Theme.PANEL_COLOR);
       centerPanel.add(resultsLabel, BorderLayout.NORTH);
       centerPanel.add(scrollPane, BorderLayout.CENTER);
       centerPanel.add(buttonPanel, BorderLayout.SOUTH);
@@ -529,32 +523,32 @@ public class UnifiedModsDialog extends JDialog {
 
     private JPanel createInstalledPanel() {
       JPanel panel = new JPanel(new BorderLayout(5, 5));
-      panel.setBackground(PANEL_COLOR);
+      panel.setBackground(Theme.PANEL_COLOR);
       panel.setBorder(BorderFactory.createCompoundBorder(
-          BorderFactory.createLineBorder(new Color(50, 50, 50)),
+          BorderFactory.createLineBorder(Theme.BORDER_COLOR),
           new EmptyBorder(15, 15, 15, 15)));
 
       // Header with Iris status
       JPanel headerPanel = new JPanel(new BorderLayout(5, 10));
-      headerPanel.setBackground(PANEL_COLOR);
+      headerPanel.setBackground(Theme.PANEL_COLOR);
 
       JLabel titleLabel = new JLabel("Installed Shader Packs");
-      titleLabel.setForeground(TEXT_COLOR);
+      titleLabel.setForeground(Theme.TEXT_COLOR);
       titleLabel.setFont(new Font("Arial", Font.BOLD, 16));
 
       // Iris status
       JPanel irisPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
-      irisPanel.setBackground(new Color(40, 40, 40));
+      irisPanel.setBackground(Theme.ITEM_COLOR);
       irisPanel.setBorder(BorderFactory.createCompoundBorder(
-          BorderFactory.createLineBorder(new Color(60, 60, 60)),
+          BorderFactory.createLineBorder(Theme.INPUT_BORDER_COLOR),
           new EmptyBorder(8, 10, 8, 10)));
 
       JLabel irisLabel = new JLabel("Iris Shader Mod:");
-      irisLabel.setForeground(TEXT_COLOR);
+      irisLabel.setForeground(Theme.TEXT_COLOR);
       irisLabel.setFont(new Font("Arial", Font.BOLD, 11));
 
       irisStatusLabel = new JLabel("Checking...");
-      irisStatusLabel.setForeground(new Color(255, 193, 7)); // Amber
+      irisStatusLabel.setForeground(Theme.ACCENT_AMBER); // Amber
       irisStatusLabel.setFont(new Font("Arial", Font.PLAIN, 11));
 
       irisPanel.add(irisLabel);
@@ -566,25 +560,25 @@ public class UnifiedModsDialog extends JDialog {
       // Installed shaders list
       installedShadersModel = new DefaultListModel<>();
       installedShadersList = new JList<>(installedShadersModel);
-      installedShadersList.setBackground(INPUT_COLOR);
-      installedShadersList.setForeground(TEXT_COLOR);
-      installedShadersList.setSelectionBackground(SHADERS_ACCENT_COLOR);
+      installedShadersList.setBackground(Theme.INPUT_COLOR);
+      installedShadersList.setForeground(Theme.TEXT_COLOR);
+      installedShadersList.setSelectionBackground(Theme.ACCENT_PURPLE);
       installedShadersList.setCellRenderer(new InstalledModRenderer());
 
       JScrollPane scrollPane = new JScrollPane(installedShadersList);
-      scrollPane.setBorder(BorderFactory.createLineBorder(new Color(60, 60, 60)));
-      scrollPane.getViewport().setBackground(INPUT_COLOR);
+      scrollPane.setBorder(BorderFactory.createLineBorder(Theme.INPUT_BORDER_COLOR));
+      scrollPane.getViewport().setBackground(Theme.INPUT_COLOR);
 
       // Buttons
       JButton removeButton = new RoundedButton("Remove Selected");
-      removeButton.setBackground(new Color(244, 67, 54)); // Red
-      removeButton.setForeground(TEXT_COLOR);
+      removeButton.setBackground(Theme.ACCENT_RED); // Red
+      removeButton.setForeground(Theme.TEXT_COLOR);
       removeButton.setPreferredSize(new Dimension(150, 35));
       removeButton.addActionListener(e -> removeSelectedShader());
 
       JButton refreshButton = new RoundedButton("Refresh");
-      refreshButton.setBackground(new Color(63, 81, 181)); // Indigo
-      refreshButton.setForeground(TEXT_COLOR);
+      refreshButton.setBackground(Theme.ACCENT_INDIGO); // Indigo
+      refreshButton.setForeground(Theme.TEXT_COLOR);
       refreshButton.setPreferredSize(new Dimension(100, 35));
       refreshButton.addActionListener(e -> {
         loadInstalledShaders();
@@ -592,18 +586,18 @@ public class UnifiedModsDialog extends JDialog {
       });
 
       JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
-      buttonPanel.setBackground(PANEL_COLOR);
+      buttonPanel.setBackground(Theme.PANEL_COLOR);
       buttonPanel.add(removeButton);
       buttonPanel.add(refreshButton);
 
       // Status label
       statusLabel = new JLabel("Ready");
-      statusLabel.setForeground(new Color(150, 150, 150));
+      statusLabel.setForeground(Theme.TEXT_DIM_COLOR);
       statusLabel.setFont(new Font("Arial", Font.PLAIN, 12));
       statusLabel.setBorder(new EmptyBorder(5, 0, 0, 0));
 
       JPanel bottomPanel = new JPanel(new BorderLayout());
-      bottomPanel.setBackground(PANEL_COLOR);
+      bottomPanel.setBackground(Theme.PANEL_COLOR);
       bottomPanel.add(buttonPanel, BorderLayout.NORTH);
       bottomPanel.add(statusLabel, BorderLayout.SOUTH);
 
@@ -627,14 +621,14 @@ public class UnifiedModsDialog extends JDialog {
             boolean installed = get();
             if (installed) {
               irisStatusLabel.setText("Installed");
-              irisStatusLabel.setForeground(new Color(76, 175, 80)); // Green
+              irisStatusLabel.setForeground(Theme.ACCENT_GREEN); // Green
             } else {
               irisStatusLabel.setText("Not installed (auto-installs with first shader)");
-              irisStatusLabel.setForeground(new Color(255, 193, 7)); // Amber
+              irisStatusLabel.setForeground(Theme.ACCENT_AMBER); // Amber
             }
           } catch (Exception e) {
             irisStatusLabel.setText("Unknown");
-            irisStatusLabel.setForeground(new Color(244, 67, 54)); // Red
+            irisStatusLabel.setForeground(Theme.ACCENT_RED); // Red
           }
         }
       };
@@ -797,8 +791,8 @@ public class UnifiedModsDialog extends JDialog {
         setText(mod.getDisplayName() + " v" + mod.getVersion() + " (" + mod.getFormattedSize() + ")");
       }
 
-      setBackground(isSelected ? list.getSelectionBackground() : INPUT_COLOR);
-      setForeground(TEXT_COLOR);
+      setBackground(isSelected ? list.getSelectionBackground() : Theme.INPUT_COLOR);
+      setForeground(Theme.TEXT_COLOR);
       setBorder(new EmptyBorder(5, 10, 5, 10));
 
       return this;
@@ -822,8 +816,8 @@ public class UnifiedModsDialog extends JDialog {
             "<small>" + truncate(project.getDescription(), 80) + "</small></html>");
       }
 
-      setBackground(isSelected ? list.getSelectionBackground() : INPUT_COLOR);
-      setForeground(TEXT_COLOR);
+      setBackground(isSelected ? list.getSelectionBackground() : Theme.INPUT_COLOR);
+      setForeground(Theme.TEXT_COLOR);
       setBorder(new EmptyBorder(8, 12, 8, 12));
 
       return this;

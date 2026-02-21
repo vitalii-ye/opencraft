@@ -1,6 +1,6 @@
 package opencraft.ui;
 
-import opencraft.network.MinecraftVersionManager.MinecraftVersion;
+import opencraft.model.MinecraftVersion;
 import opencraft.utils.MinecraftPathResolver;
 
 import javax.swing.*;
@@ -33,7 +33,7 @@ public class VersionComboBoxRenderer extends JPanel implements ListCellRenderer<
     // Center: Fabric badge
     fabricBadge = new JLabel("[Fabric]");
     fabricBadge.setFont(new Font("Arial", Font.BOLD, 10));
-    fabricBadge.setForeground(new Color(139, 195, 74)); // Light green color for Fabric
+    fabricBadge.setForeground(Theme.ACCENT_FABRIC); // Light green color for Fabric
     fabricBadge.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
 
     // Right side: download status
@@ -106,17 +106,17 @@ public class VersionComboBoxRenderer extends JPanel implements ListCellRenderer<
 
     // Set colors based on selection
     Color backgroundColor;
-    Color foregroundColor = Color.WHITE;
+    Color foregroundColor = Theme.TEXT_COLOR;
 
     if (isSelected) {
-      backgroundColor = new Color(80, 80, 80);
+      backgroundColor = Theme.SELECTED_COLOR;
     } else {
-      backgroundColor = new Color(40, 40, 40);
+      backgroundColor = Theme.ITEM_COLOR;
     }
 
     setBackground(backgroundColor);
     versionLabel.setForeground(foregroundColor);
-    statusLabel.setForeground(new Color(150, 150, 150)); // Slightly dimmed
+    statusLabel.setForeground(Theme.TEXT_DIM_COLOR); // Slightly dimmed
 
     return this;
   }

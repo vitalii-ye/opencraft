@@ -1,6 +1,6 @@
 package opencraft.network;
 
-import opencraft.network.MinecraftVersionManager.MinecraftVersion;
+import opencraft.model.MinecraftVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

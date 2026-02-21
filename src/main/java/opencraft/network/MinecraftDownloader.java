@@ -2,19 +2,19 @@ package opencraft.network;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import opencraft.utils.PlatformUtils;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import opencraft.network.MinecraftVersionManager;
+import opencraft.model.MinecraftVersion;
+import opencraft.utils.LogHelper;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -22,15 +22,30 @@ import java.util.function.Consumer;
 
 public class MinecraftDownloader {
 
-  private static final HttpClient client = HttpClient.newHttpClient();
-  private static final ObjectMapper mapper = new ObjectMapper();
+  private final HttpClient client;
+  private final ObjectMapper mapper;
 
-  public static void downloadMinecraft(String manifestUrl, Path baseDir, String versionId)
+  /**
+   * Creates a MinecraftDownloader using the real HTTP client.
+   */
+  public MinecraftDownloader() {
+    this(HttpClient.newHttpClient());
+  }
+
+  /**
+   * Creates a MinecraftDownloader with a custom HttpClient (for testing/DI).
+   */
+  public MinecraftDownloader(HttpClient client) {
+    this.client = client;
+    this.mapper = new ObjectMapper();
+  }
+
+  public void downloadMinecraft(String manifestUrl, Path baseDir, String versionId)
       throws IOException, InterruptedException {
       downloadMinecraft(manifestUrl, baseDir, versionId, null);
   }
 
-  public static void downloadMinecraft(String manifestUrl, Path baseDir, String versionId, Consumer<String> logger)
+  public void downloadMinecraft(String manifestUrl, Path baseDir, String versionId, Consumer<String> logger)
       throws IOException, InterruptedException {
     // Load manifest JSON
     JsonNode root = fetchJson(manifestUrl);
@@ -39,7 +54,7 @@ public class MinecraftDownloader {
     Path manifestPath = baseDir.resolve("versions/" + versionId + "/" + versionId + ".json");
     Files.createDirectories(manifestPath.getParent());
     mapper.writeValue(manifestPath.toFile(), root);
-    log(logger, "Saved manifest: " + manifestPath);
+    LogHelper.log(logger, "Saved manifest: " + manifestPath);
 
     // Download main client JAR
     JsonNode downloads = root.path("downloads").path("client");
@@ -57,7 +72,7 @@ public class MinecraftDownloader {
     for (JsonNode lib : libraries) {
       // Check if this library is allowed for current OS/arch (same logic as
       // MinecraftLauncher)
-      if (!isLibraryAllowed(lib))
+      if (!PlatformUtils.isLibraryAllowed(lib))
         continue;
 
       JsonNode downloadsNode = lib.path("downloads").path("artifact");
@@ -84,7 +99,7 @@ public class MinecraftDownloader {
         }
 
         // Only add the current platform's native library to classpath
-        String nativeKey = getNativeClassifier();
+        String nativeKey = PlatformUtils.getNativeClassifier();
         if (nativeKey != null && classifiers.has(nativeKey)) {
           JsonNode nativeLib = classifiers.get(nativeKey);
           String path = nativeLib.get("path").asText();
@@ -99,8 +114,8 @@ public class MinecraftDownloader {
     String classpathString = String.join(File.pathSeparator, classpathEntries);
     Files.writeString(librariesTxtPath, classpathString, StandardOpenOption.CREATE,
         StandardOpenOption.TRUNCATE_EXISTING);
-    log(logger, "Created libraries_" + versionId + ".txt with " + classpathEntries.size() + " entries");
-    log(logger, "Using path separator: " + File.pathSeparator);
+    LogHelper.log(logger, "Created libraries_" + versionId + ".txt with " + classpathEntries.size() + " entries");
+    LogHelper.log(logger, "Using path separator: " + File.pathSeparator);
 
     // Download assets index
     JsonNode assetIndex = root.path("assetIndex");
@@ -114,55 +129,36 @@ public class MinecraftDownloader {
       downloadAssets(assetIndexPath, baseDir, logger);
     }
 
-    log(logger, "All required files downloaded into: " + baseDir.toAbsolutePath());
+    LogHelper.log(logger, "All required files downloaded into: " + baseDir.toAbsolutePath());
   }
 
   /**
    * Downloads a specific Minecraft version using a MinecraftVersion object
    */
-  public static void downloadMinecraft(MinecraftVersionManager.MinecraftVersion version, Path baseDir)
+  public void downloadMinecraft(MinecraftVersion version, Path baseDir)
       throws IOException, InterruptedException {
     downloadMinecraft(version.getUrl(), baseDir, version.getId(), null);
   }
 
-  public static void downloadMinecraft(MinecraftVersionManager.MinecraftVersion version, Path baseDir, Consumer<String> logger)
+  public void downloadMinecraft(MinecraftVersion version, Path baseDir, Consumer<String> logger)
       throws IOException, InterruptedException {
     downloadMinecraft(version.getUrl(), baseDir, version.getId(), logger);
   }
 
-  private static void log(Consumer<String> logger, String message) {
-    if (logger != null) {
-      logger.accept(message);
-    } else {
-      System.out.println(message);
-    }
-  }
 
-  private static JsonNode fetchJson(String url) throws IOException, InterruptedException {
+  private JsonNode fetchJson(String url) throws IOException, InterruptedException {
     HttpRequest request = HttpRequest.newBuilder(URI.create(url)).GET().build();
     HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
     return mapper.readTree(response.body());
   }
 
-  private static void downloadFile(String url, Path dest) throws IOException, InterruptedException {
-      downloadFile(url, dest, null);
+  private void downloadFile(String url, Path dest, Consumer<String> logger) throws IOException, InterruptedException {
+    FileDownloader.download(url, dest);
+    LogHelper.log(logger, "Downloaded: " + dest);
   }
 
-  private static void downloadFile(String url, Path dest, Consumer<String> logger) throws IOException, InterruptedException {
-    if (Files.exists(dest))
-      return; // skip if already downloaded
-    Files.createDirectories(dest.getParent());
-
-    HttpRequest request = HttpRequest.newBuilder(URI.create(url)).GET().build();
-    HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
-    try (InputStream in = response.body()) {
-      Files.copy(in, dest, StandardCopyOption.REPLACE_EXISTING);
-    }
-    log(logger, "Downloaded: " + dest);
-  }
-
-  private static void downloadAssets(Path assetIndexPath, Path baseDir, Consumer<String> logger) throws IOException, InterruptedException {
-    log(logger, "Downloading assets...");
+  private void downloadAssets(Path assetIndexPath, Path baseDir, Consumer<String> logger) throws IOException, InterruptedException {
+    LogHelper.log(logger, "Downloading assets...");
     JsonNode assetIndex = mapper.readTree(assetIndexPath.toFile());
     JsonNode objects = assetIndex.path("objects");
 
@@ -186,62 +182,11 @@ public class MinecraftDownloader {
 
       downloaded++;
       if (downloaded % 100 == 0) {
-        log(logger, "Downloaded " + downloaded + "/" + totalAssets + " assets...");
+        LogHelper.log(logger, "Downloaded " + downloaded + "/" + totalAssets + " assets...");
       }
     }
 
-    log(logger, "Downloaded all " + totalAssets + " assets!");
+    LogHelper.log(logger, "Downloaded all " + totalAssets + " assets!");
   }
 
-  public static void main(String[] args) throws Exception {
-    String manifestUrl = "https://piston-meta.mojang.com/v1/packages/ff7e92039cfb1dca99bad680f278c40edd82f0e1/1.21.json";
-    Path baseDir = Path.of("minecraft"); // change to your desired folder
-    downloadMinecraft(manifestUrl, baseDir, "1.21");
-  }
-
-  private static boolean isLibraryAllowed(JsonNode lib) {
-    JsonNode rules = lib.path("rules");
-    if (rules.isMissingNode())
-      return true;
-
-    for (JsonNode rule : rules) {
-      String action = rule.get("action").asText();
-      JsonNode os = rule.path("os");
-
-      if (os.isMissingNode()) {
-        return "allow".equals(action);
-      } else {
-        String osName = os.path("name").asText();
-        if (matchesCurrentOS(osName)) {
-          return "allow".equals(action);
-        }
-      }
-    }
-    return true;
-  }
-
-  private static boolean matchesCurrentOS(String osName) {
-    String currentOS = System.getProperty("os.name").toLowerCase();
-    if (currentOS.contains("win") && "windows".equals(osName))
-      return true;
-    if (currentOS.contains("mac") && "osx".equals(osName))
-      return true;
-    if (currentOS.contains("nix") || currentOS.contains("nux"))
-      return "linux".equals(osName);
-    return false;
-  }
-
-  private static String getNativeClassifier() {
-    String os = System.getProperty("os.name").toLowerCase();
-    String arch = System.getProperty("os.arch").toLowerCase();
-
-    if (os.contains("win")) {
-      return arch.contains("64") ? "natives-windows-x86_64" : "natives-windows-x86";
-    } else if (os.contains("mac")) {
-      return arch.contains("aarch64") || arch.contains("arm") ? "natives-macos-arm64" : "natives-macos-x86_64";
-    } else if (os.contains("nix") || os.contains("nux")) {
-      return arch.contains("64") ? "natives-linux-x86_64" : "natives-linux-x86";
-    }
-    return null;
-  }
 }

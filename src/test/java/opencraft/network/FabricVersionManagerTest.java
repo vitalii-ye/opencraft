@@ -1,8 +1,8 @@
 package opencraft.network;
 
-import opencraft.network.FabricVersionManager.FabricGameVersion;
-import opencraft.network.FabricVersionManager.FabricLoaderVersion;
-import opencraft.network.FabricVersionManager.FabricVersion;
+import opencraft.model.FabricGameVersion;
+import opencraft.model.FabricLoaderVersion;
+import opencraft.model.FabricVersion;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;

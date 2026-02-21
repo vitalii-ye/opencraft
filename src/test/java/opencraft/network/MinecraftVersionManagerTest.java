@@ -1,7 +1,7 @@
 package opencraft.network;
 
-import opencraft.network.MinecraftVersionManager.MinecraftVersion;
-import opencraft.network.MinecraftVersionManager.VersionResponse;
+import opencraft.model.MinecraftVersion;
+import opencraft.model.VersionResponse;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;

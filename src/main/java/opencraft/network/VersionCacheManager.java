@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import opencraft.utils.MinecraftPathResolver;
+import opencraft.model.MinecraftVersion;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -75,7 +76,7 @@ public class VersionCacheManager {
      * Gets cached versions if available and valid (within TTL).
      * Returns null if cache doesn't exist or is invalid.
      */
-    public List<MinecraftVersionManager.MinecraftVersion> getCachedVersions() {
+    public List<MinecraftVersion> getCachedVersions() {
         try {
             if (!Files.exists(cacheFilePath) || !Files.exists(metadataFilePath)) {
                 return null;
@@ -106,9 +107,9 @@ public class VersionCacheManager {
     /**
      * Reads versions from cache file
      */
-    private List<MinecraftVersionManager.MinecraftVersion> readVersionsFromCache() throws IOException {
+    private List<MinecraftVersion> readVersionsFromCache() throws IOException {
         JsonNode root = mapper.readTree(cacheFilePath.toFile());
-        List<MinecraftVersionManager.MinecraftVersion> versions = new ArrayList<>();
+        List<MinecraftVersion> versions = new ArrayList<>();
 
         if (root.isArray()) {
             for (JsonNode versionNode : root) {
@@ -116,7 +117,7 @@ public class VersionCacheManager {
                 String type = versionNode.get("type").asText();
                 String url = versionNode.get("url").asText();
                 String releaseTime = versionNode.get("releaseTime").asText();
-                versions.add(new MinecraftVersionManager.MinecraftVersion(id, type, url, releaseTime));
+                versions.add(new MinecraftVersion(id, type, url, releaseTime));
             }
         }
 
@@ -126,14 +127,14 @@ public class VersionCacheManager {
     /**
      * Saves versions to cache along with metadata
      */
-    public void saveToCache(List<MinecraftVersionManager.MinecraftVersion> versions, String etag) {
+    public void saveToCache(List<MinecraftVersion> versions, String etag) {
         try {
             // Ensure directory exists
             Files.createDirectories(cacheFilePath.getParent());
 
             // Save versions
             ArrayNode versionsArray = mapper.createArrayNode();
-            for (MinecraftVersionManager.MinecraftVersion version : versions) {
+            for (MinecraftVersion version : versions) {
                 ObjectNode versionNode = mapper.createObjectNode();
                 versionNode.put("id", version.getId());
                 versionNode.put("type", version.getType());

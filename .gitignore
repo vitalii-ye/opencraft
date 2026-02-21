@@ -4,5 +4,6 @@ target
 .settings
 .DS_Store
 .classpath
+.opencode
 .idea
 dependency-reduced-pom.xml

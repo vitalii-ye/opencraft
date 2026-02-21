@@ -2,8 +2,8 @@ package opencraft.ui;
 
 import opencraft.mods.InstalledMod;
 import opencraft.mods.ShaderManager;
-import opencraft.network.MinecraftVersionManager.MinecraftVersion;
-import opencraft.network.ModrinthApiClient.ModrinthProject;
+import opencraft.model.MinecraftVersion;
+import opencraft.model.ModrinthProject;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;

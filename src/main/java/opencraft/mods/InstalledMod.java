@@ -53,7 +53,7 @@ public class InstalledMod {
             fileSize = java.nio.file.Files.size(file);
             installedAt = java.nio.file.Files.getLastModifiedTime(file).toInstant();
         } catch (Exception e) {
-            // Ignore errors, use defaults
+            System.err.println("Warning: could not read file metadata for " + file + ": " + e.getMessage());
         }
         
         return new InstalledMod(fileName, displayName, version, file, fileSize, 

@@ -1,9 +1,10 @@
 package opencraft.mods;
 
 import opencraft.network.ModrinthApiClient;
-import opencraft.network.ModrinthApiClient.ModrinthFile;
-import opencraft.network.ModrinthApiClient.ModrinthProject;
-import opencraft.network.ModrinthApiClient.ModrinthVersion;
+import opencraft.model.ModrinthFile;
+import opencraft.model.ModrinthProject;
+import opencraft.model.ModrinthVersion;
+import opencraft.utils.LogHelper;
 import opencraft.utils.MinecraftPathResolver;
 
 import java.io.IOException;
@@ -21,13 +22,15 @@ public class ModManager {
 
     private final Path baseModsDir;
     private final Path activeModsDir;
+    private final ModrinthApiClient modrinthClient;
 
     /**
      * Creates a ModManager using the default Minecraft directory paths.
      */
     public ModManager() {
         this(MinecraftPathResolver.getMinecraftDirectory().resolve("mods"),
-             MinecraftPathResolver.getModsDirectory());
+             MinecraftPathResolver.getModsDirectory(),
+             new ModrinthApiClient());
     }
 
     /**
@@ -37,8 +40,20 @@ public class ModManager {
      * @param activeModsDir Directory where active mods are placed for the running game
      */
     public ModManager(Path baseModsDir, Path activeModsDir) {
+        this(baseModsDir, activeModsDir, new ModrinthApiClient());
+    }
+
+    /**
+     * Creates a ModManager with custom directories and a custom API client for testability.
+     *
+     * @param baseModsDir    Root directory for per-version mod storage
+     * @param activeModsDir  Directory where active mods are placed for the running game
+     * @param modrinthClient Modrinth API client instance
+     */
+    public ModManager(Path baseModsDir, Path activeModsDir, ModrinthApiClient modrinthClient) {
         this.baseModsDir = baseModsDir;
         this.activeModsDir = activeModsDir;
+        this.modrinthClient = modrinthClient;
     }
 
     /**
@@ -75,24 +90,6 @@ public class ModManager {
     }
 
     /**
-     * Gets all installed mods in the active mods directory.
-     */
-    public List<InstalledMod> getActiveInstalledMods() throws IOException {
-        List<InstalledMod> mods = new ArrayList<>();
-
-        if (!Files.exists(activeModsDir)) {
-            return mods;
-        }
-
-        try (Stream<Path> files = Files.list(activeModsDir)) {
-            files.filter(ModManager::isModFile)
-                 .forEach(file -> mods.add(InstalledMod.fromFile(file, "active", InstalledMod.ModType.MOD)));
-        }
-
-        return mods;
-    }
-
-    /**
      * Installs a mod from Modrinth for a specific game version.
      * 
      * @param project     The Modrinth project to install
@@ -103,10 +100,10 @@ public class ModManager {
     public InstalledMod installMod(ModrinthProject project, String gameVersion, Consumer<String> logger)
             throws IOException, InterruptedException {
         
-        log(logger, "Finding compatible version of " + project.getTitle() + "...");
+        LogHelper.log(logger, "Finding compatible version of " + project.getTitle() + "...");
 
         // Get versions compatible with the game version and Fabric
-        List<ModrinthVersion> versions = ModrinthApiClient.getProjectVersions(
+        List<ModrinthVersion> versions = modrinthClient.getProjectVersions(
                 project.getId(), gameVersion, "fabric");
 
         if (versions.isEmpty()) {
@@ -130,42 +127,18 @@ public class ModManager {
         
         // Check if already installed
         if (Files.exists(destination)) {
-            log(logger, project.getTitle() + " is already installed.");
+            LogHelper.log(logger, project.getTitle() + " is already installed.");
             return InstalledMod.fromFile(destination, gameVersion, InstalledMod.ModType.MOD);
         }
 
         // Download the mod
-        log(logger, "Downloading " + project.getTitle() + " v" + version.getVersionNumber() + "...");
-        ModrinthApiClient.downloadFile(file, destination, logger);
+        LogHelper.log(logger, "Downloading " + project.getTitle() + " v" + version.getVersionNumber() + "...");
+        modrinthClient.downloadFile(file, destination, logger);
 
         // Also copy to active mods directory for immediate use
         copyToActiveModsDir(destination, logger);
 
-        log(logger, "Installed " + project.getTitle() + " v" + version.getVersionNumber());
-
-        return InstalledMod.fromFile(destination, gameVersion, InstalledMod.ModType.MOD);
-    }
-
-    /**
-     * Installs a mod from a specific version.
-     */
-    public InstalledMod installModVersion(ModrinthVersion version, String gameVersion, Consumer<String> logger)
-            throws IOException, InterruptedException {
-        
-        ModrinthFile file = version.getPrimaryFile();
-        if (file == null) {
-            throw new IOException("No downloadable file found");
-        }
-
-        Path modsDir = getModsDirectory(gameVersion);
-        Files.createDirectories(modsDir);
-
-        Path destination = modsDir.resolve(file.getFilename());
-        
-        log(logger, "Downloading " + file.getFilename() + "...");
-        ModrinthApiClient.downloadFile(file, destination, logger);
-
-        copyToActiveModsDir(destination, logger);
+        LogHelper.log(logger, "Installed " + project.getTitle() + " v" + version.getVersionNumber());
 
         return InstalledMod.fromFile(destination, gameVersion, InstalledMod.ModType.MOD);
     }
@@ -179,7 +152,7 @@ public class ModManager {
             
             if (Files.exists(filePath)) {
                 Files.delete(filePath);
-                log(logger, "Removed " + mod.getDisplayName());
+                LogHelper.log(logger, "Removed " + mod.getDisplayName());
             }
 
             // Also remove from active mods directory if present
@@ -190,7 +163,7 @@ public class ModManager {
 
             return true;
         } catch (IOException e) {
-            log(logger, "Failed to remove " + mod.getDisplayName() + ": " + e.getMessage());
+            LogHelper.log(logger, "Failed to remove " + mod.getDisplayName() + ": " + e.getMessage());
             return false;
         }
     }
@@ -241,7 +214,7 @@ public class ModManager {
                          try {
                              Path dest = targetModsDir.resolve(file.getFileName());
                              Files.copy(file, dest, StandardCopyOption.REPLACE_EXISTING);
-                             log(logger, "Synced: " + file.getFileName());
+                              LogHelper.log(logger, "Synced: " + file.getFileName());
                          } catch (IOException e) {
                              System.err.println("Failed to copy " + file + ": " + e.getMessage());
                          }
@@ -249,7 +222,7 @@ public class ModManager {
             }
         }
 
-        log(logger, "Mods synced for version " + gameVersion);
+        LogHelper.log(logger, "Mods synced for version " + gameVersion);
     }
 
     /**
@@ -265,7 +238,7 @@ public class ModManager {
      */
     public List<ModrinthProject> searchMods(String query, String gameVersion) 
             throws IOException, InterruptedException {
-        return ModrinthApiClient.searchMods(query, gameVersion, "fabric", 20);
+        return modrinthClient.searchMods(query, gameVersion, "fabric", 20);
     }
 
     /**
@@ -277,7 +250,7 @@ public class ModManager {
             Path dest = activeModsDir.resolve(modFile.getFileName());
             Files.copy(modFile, dest, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
-            log(logger, "Note: Could not copy to active mods directory: " + e.getMessage());
+            LogHelper.log(logger, "Note: Could not copy to active mods directory: " + e.getMessage());
         }
     }
 
@@ -292,11 +265,4 @@ public class ModManager {
         return name.endsWith(".jar");
     }
 
-    private static void log(Consumer<String> logger, String message) {
-        if (logger != null) {
-            logger.accept(message);
-        } else {
-            System.out.println(message);
-        }
-    }
 }

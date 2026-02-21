@@ -1,8 +1,8 @@
 package opencraft.network;
 
-import opencraft.network.ModrinthApiClient.ModrinthFile;
-import opencraft.network.ModrinthApiClient.ModrinthProject;
-import opencraft.network.ModrinthApiClient.ModrinthVersion;
+import opencraft.model.ModrinthFile;
+import opencraft.model.ModrinthProject;
+import opencraft.model.ModrinthVersion;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
