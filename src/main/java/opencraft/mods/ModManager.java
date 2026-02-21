@@ -12,6 +12,7 @@ import java.nio.file.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -195,31 +196,36 @@ public class ModManager {
         Files.createDirectories(targetModsDir);
 
         // Clear target mods directory
+        List<String> failures = new ArrayList<>();
         try (Stream<Path> files = Files.list(targetModsDir)) {
-            files.filter(ModManager::isModFile)
-                 .forEach(file -> {
-                     try {
-                         Files.delete(file);
-                     } catch (IOException e) {
-                         System.err.println("Failed to delete " + file + ": " + e.getMessage());
-                     }
-                 });
+            List<Path> toDelete = files.filter(ModManager::isModFile).collect(Collectors.toList());
+            for (Path file : toDelete) {
+                try {
+                    Files.delete(file);
+                } catch (IOException e) {
+                    failures.add("Failed to delete " + file + ": " + e.getMessage());
+                }
+            }
         }
 
         // Copy mods from version-specific directory
         if (Files.exists(sourceModsDir)) {
             try (Stream<Path> files = Files.list(sourceModsDir)) {
-                files.filter(ModManager::isModFile)
-                     .forEach(file -> {
-                         try {
-                             Path dest = targetModsDir.resolve(file.getFileName());
-                             Files.copy(file, dest, StandardCopyOption.REPLACE_EXISTING);
-                              LogHelper.log(logger, "Synced: " + file.getFileName());
-                         } catch (IOException e) {
-                             System.err.println("Failed to copy " + file + ": " + e.getMessage());
-                         }
-                     });
+                List<Path> toCopy = files.filter(ModManager::isModFile).collect(Collectors.toList());
+                for (Path file : toCopy) {
+                    try {
+                        Path dest = targetModsDir.resolve(file.getFileName());
+                        Files.copy(file, dest, StandardCopyOption.REPLACE_EXISTING);
+                        LogHelper.log(logger, "Synced: " + file.getFileName());
+                    } catch (IOException e) {
+                        failures.add("Failed to copy " + file + ": " + e.getMessage());
+                    }
+                }
             }
+        }
+
+        if (!failures.isEmpty()) {
+            throw new IOException("Mod sync completed with errors:\n" + String.join("\n", failures));
         }
 
         LogHelper.log(logger, "Mods synced for version " + gameVersion);
