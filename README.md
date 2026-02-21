@@ -11,7 +11,7 @@ Open source launcher for Minecraft
 
 ## Features
 - [x] Running preselected Minecraft versions
-- [ ] Support for Fabric mods
+- [x] Support for Fabric mods
 - [ ] Custom skins
 
 ## Build from source
