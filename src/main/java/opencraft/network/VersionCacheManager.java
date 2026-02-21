@@ -30,9 +30,12 @@ public class VersionCacheManager {
     private final ObjectMapper mapper;
 
     public VersionCacheManager() {
-        Path minecraftDir = MinecraftPathResolver.getMinecraftDirectory();
-        this.cacheFilePath = minecraftDir.resolve(CACHE_FILE);
-        this.metadataFilePath = minecraftDir.resolve(METADATA_FILE);
+        this(MinecraftPathResolver.getMinecraftDirectory());
+    }
+
+    public VersionCacheManager(Path cacheDir) {
+        this.cacheFilePath = cacheDir.resolve(CACHE_FILE);
+        this.metadataFilePath = cacheDir.resolve(METADATA_FILE);
         this.mapper = new ObjectMapper();
     }
 

@@ -1,9 +1,8 @@
 package opencraft.ui;
 
 import opencraft.mods.InstalledMod;
-import opencraft.mods.ModManager;
+import opencraft.mods.ShaderManager;
 import opencraft.network.MinecraftVersionManager.MinecraftVersion;
-import opencraft.network.ModrinthApiClient;
 import opencraft.network.ModrinthApiClient.ModrinthProject;
 
 import javax.swing.*;
@@ -12,39 +11,44 @@ import java.awt.*;
 import java.util.List;
 
 /**
- * Dialog for managing Minecraft mods.
- * Allows users to search, install, and remove mods from Modrinth.
+ * Dialog for managing Minecraft shaders.
+ * Allows users to search, install, and remove shaders from Modrinth.
+ * Automatically installs Iris shader mod when needed.
  */
-public class ModsDialog extends JDialog {
+public class ShadersDialog extends JDialog {
   private static final long serialVersionUID = 1L;
 
   @SuppressWarnings("serial")
   private final MinecraftVersion version;
   private final String gameVersion;
+  private final transient ShaderManager shaderManager;
 
   private JTextField searchField;
   private JButton searchButton;
   private DefaultListModel<ModrinthProject> searchResultsModel;
   private JList<ModrinthProject> searchResultsList;
-  private DefaultListModel<InstalledMod> installedModsModel;
-  private JList<InstalledMod> installedModsList;
+  private DefaultListModel<InstalledMod> installedShadersModel;
+  private JList<InstalledMod> installedShadersList;
   private JLabel statusLabel;
+  private JLabel irisStatusLabel;
 
   // Colors matching the main launcher theme
   private static final Color BG_COLOR = new Color(20, 20, 20);
   private static final Color PANEL_COLOR = new Color(30, 30, 30);
   private static final Color INPUT_COLOR = new Color(45, 45, 45);
   private static final Color TEXT_COLOR = Color.WHITE;
-  private static final Color ACCENT_COLOR = new Color(76, 175, 80);
+  private static final Color ACCENT_COLOR = new Color(156, 39, 176); // Purple for shaders
 
   @SuppressWarnings({ "this-escape", "serial" })
-  public ModsDialog(Frame parent, MinecraftVersion version) {
-    super(parent, "Manage Mods - " + version.getDisplayName(), true);
+  public ShadersDialog(Frame parent, MinecraftVersion version) {
+    super(parent, "Manage Shaders - " + version.getDisplayName(), true);
     this.version = version;
     this.gameVersion = version.getBaseGameVersion();
+    this.shaderManager = new ShaderManager();
 
     initializeUI();
-    loadInstalledMods();
+    loadInstalledShaders();
+    checkIrisStatus();
 
     setSize(600, 500);
     setLocationRelativeTo(parent);
@@ -56,9 +60,9 @@ public class ModsDialog extends JDialog {
     setLayout(new BorderLayout(10, 10));
     ((JPanel) getContentPane()).setBorder(new EmptyBorder(15, 15, 15, 15));
 
-    // Top panel - Search
-    JPanel searchPanel = createSearchPanel();
-    add(searchPanel, BorderLayout.NORTH);
+    // Top panel - Iris status and Search
+    JPanel topPanel = createTopPanel();
+    add(topPanel, BorderLayout.NORTH);
 
     // Center panel - Split between installed and search results
     JSplitPane splitPane = createMainContent();
@@ -69,12 +73,34 @@ public class ModsDialog extends JDialog {
     add(bottomPanel, BorderLayout.SOUTH);
   }
 
-  private JPanel createSearchPanel() {
-    JPanel panel = new JPanel(new BorderLayout(10, 0));
+  private JPanel createTopPanel() {
+    JPanel panel = new JPanel(new BorderLayout(10, 10));
     panel.setBackground(BG_COLOR);
     panel.setBorder(new EmptyBorder(0, 0, 10, 0));
 
-    JLabel searchLabel = new JLabel("Search Modrinth:");
+    // Iris status panel
+    JPanel irisPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+    irisPanel.setBackground(new Color(40, 40, 40));
+    irisPanel.setBorder(BorderFactory.createCompoundBorder(
+        BorderFactory.createLineBorder(new Color(60, 60, 60)),
+        new EmptyBorder(8, 10, 8, 10)));
+
+    JLabel irisLabel = new JLabel("Iris Shader Mod:");
+    irisLabel.setForeground(TEXT_COLOR);
+    irisLabel.setFont(new Font("Arial", Font.BOLD, 12));
+
+    irisStatusLabel = new JLabel("Checking...");
+    irisStatusLabel.setForeground(new Color(255, 193, 7)); // Amber
+    irisStatusLabel.setFont(new Font("Arial", Font.PLAIN, 12));
+
+    irisPanel.add(irisLabel);
+    irisPanel.add(irisStatusLabel);
+
+    // Search panel
+    JPanel searchPanel = new JPanel(new BorderLayout(10, 0));
+    searchPanel.setBackground(BG_COLOR);
+
+    JLabel searchLabel = new JLabel("Search Shaders on Modrinth:");
     searchLabel.setForeground(TEXT_COLOR);
     searchLabel.setFont(new Font("Arial", Font.PLAIN, 12));
 
@@ -98,47 +124,50 @@ public class ModsDialog extends JDialog {
     inputPanel.add(searchField, BorderLayout.CENTER);
     inputPanel.add(searchButton, BorderLayout.EAST);
 
-    panel.add(searchLabel, BorderLayout.NORTH);
-    panel.add(inputPanel, BorderLayout.CENTER);
+    searchPanel.add(searchLabel, BorderLayout.NORTH);
+    searchPanel.add(inputPanel, BorderLayout.CENTER);
+
+    panel.add(irisPanel, BorderLayout.NORTH);
+    panel.add(searchPanel, BorderLayout.CENTER);
 
     return panel;
   }
 
   private JSplitPane createMainContent() {
-    // Installed mods panel (left/top)
-    JPanel installedPanel = createInstalledModsPanel();
+    // Installed shaders panel (top)
+    JPanel installedPanel = createInstalledShadersPanel();
 
-    // Search results panel (right/bottom)
+    // Search results panel (bottom)
     JPanel searchResultsPanel = createSearchResultsPanel();
 
     JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, installedPanel, searchResultsPanel);
-    splitPane.setResizeWeight(0.5);
-    splitPane.setDividerLocation(200);
+    splitPane.setResizeWeight(0.4);
+    splitPane.setDividerLocation(180);
     splitPane.setBackground(BG_COLOR);
     splitPane.setBorder(null);
 
     return splitPane;
   }
 
-  private JPanel createInstalledModsPanel() {
+  private JPanel createInstalledShadersPanel() {
     JPanel panel = new JPanel(new BorderLayout(5, 5));
     panel.setBackground(PANEL_COLOR);
     panel.setBorder(BorderFactory.createCompoundBorder(
         BorderFactory.createLineBorder(new Color(50, 50, 50)),
         new EmptyBorder(10, 10, 10, 10)));
 
-    JLabel titleLabel = new JLabel("Installed Mods");
+    JLabel titleLabel = new JLabel("Installed Shader Packs");
     titleLabel.setForeground(TEXT_COLOR);
     titleLabel.setFont(new Font("Arial", Font.BOLD, 14));
 
-    installedModsModel = new DefaultListModel<>();
-    installedModsList = new JList<>(installedModsModel);
-    installedModsList.setBackground(INPUT_COLOR);
-    installedModsList.setForeground(TEXT_COLOR);
-    installedModsList.setSelectionBackground(ACCENT_COLOR);
-    installedModsList.setCellRenderer(new InstalledModRenderer());
+    installedShadersModel = new DefaultListModel<>();
+    installedShadersList = new JList<>(installedShadersModel);
+    installedShadersList.setBackground(INPUT_COLOR);
+    installedShadersList.setForeground(TEXT_COLOR);
+    installedShadersList.setSelectionBackground(ACCENT_COLOR);
+    installedShadersList.setCellRenderer(new InstalledShaderRenderer());
 
-    JScrollPane scrollPane = new JScrollPane(installedModsList);
+    JScrollPane scrollPane = new JScrollPane(installedShadersList);
     scrollPane.setBorder(BorderFactory.createLineBorder(new Color(60, 60, 60)));
     scrollPane.getViewport().setBackground(INPUT_COLOR);
 
@@ -146,7 +175,7 @@ public class ModsDialog extends JDialog {
     removeButton.setBackground(new Color(244, 67, 54)); // Red
     removeButton.setForeground(TEXT_COLOR);
     removeButton.setPreferredSize(new Dimension(140, 30));
-    removeButton.addActionListener(e -> removeSelectedMod());
+    removeButton.addActionListener(e -> removeSelectedShader());
 
     JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
     buttonPanel.setBackground(PANEL_COLOR);
@@ -166,7 +195,7 @@ public class ModsDialog extends JDialog {
         BorderFactory.createLineBorder(new Color(50, 50, 50)),
         new EmptyBorder(10, 10, 10, 10)));
 
-    JLabel titleLabel = new JLabel("Search Results");
+    JLabel titleLabel = new JLabel("Available Shaders");
     titleLabel.setForeground(TEXT_COLOR);
     titleLabel.setFont(new Font("Arial", Font.BOLD, 14));
 
@@ -175,7 +204,7 @@ public class ModsDialog extends JDialog {
     searchResultsList.setBackground(INPUT_COLOR);
     searchResultsList.setForeground(TEXT_COLOR);
     searchResultsList.setSelectionBackground(ACCENT_COLOR);
-    searchResultsList.setCellRenderer(new ModrinthProjectRenderer());
+    searchResultsList.setCellRenderer(new ModrinthShaderRenderer());
 
     JScrollPane scrollPane = new JScrollPane(searchResultsList);
     scrollPane.setBorder(BorderFactory.createLineBorder(new Color(60, 60, 60)));
@@ -185,7 +214,7 @@ public class ModsDialog extends JDialog {
     installButton.setBackground(ACCENT_COLOR);
     installButton.setForeground(TEXT_COLOR);
     installButton.setPreferredSize(new Dimension(140, 30));
-    installButton.addActionListener(e -> installSelectedMod());
+    installButton.addActionListener(e -> installSelectedShader());
 
     JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
     buttonPanel.setBackground(PANEL_COLOR);
@@ -219,24 +248,51 @@ public class ModsDialog extends JDialog {
     return panel;
   }
 
-  private void loadInstalledMods() {
-    SwingWorker<List<InstalledMod>, Void> worker = new SwingWorker<>() {
+  private void checkIrisStatus() {
+    SwingWorker<Boolean, Void> worker = new SwingWorker<>() {
       @Override
-      protected List<InstalledMod> doInBackground() throws Exception {
-        return ModManager.getInstalledMods(gameVersion);
+      protected Boolean doInBackground() throws Exception {
+        return shaderManager.isIrisInstalled(gameVersion);
       }
 
       @Override
       protected void done() {
         try {
-          List<InstalledMod> mods = get();
-          installedModsModel.clear();
-          for (InstalledMod mod : mods) {
-            installedModsModel.addElement(mod);
+          boolean installed = get();
+          if (installed) {
+            irisStatusLabel.setText("Installed");
+            irisStatusLabel.setForeground(new Color(76, 175, 80)); // Green
+          } else {
+            irisStatusLabel.setText("Not installed (will be auto-installed with first shader)");
+            irisStatusLabel.setForeground(new Color(255, 193, 7)); // Amber
           }
-          setStatus("Found " + mods.size() + " installed mods");
         } catch (Exception e) {
-          setStatus("Error loading mods: " + e.getMessage());
+          irisStatusLabel.setText("Unknown");
+          irisStatusLabel.setForeground(new Color(244, 67, 54)); // Red
+        }
+      }
+    };
+    worker.execute();
+  }
+
+  private void loadInstalledShaders() {
+    SwingWorker<List<InstalledMod>, Void> worker = new SwingWorker<>() {
+      @Override
+      protected List<InstalledMod> doInBackground() throws Exception {
+          return shaderManager.getInstalledShaders();
+      }
+
+      @Override
+      protected void done() {
+        try {
+          List<InstalledMod> shaders = get();
+          installedShadersModel.clear();
+          for (InstalledMod shader : shaders) {
+            installedShadersModel.addElement(shader);
+          }
+          setStatus("Found " + shaders.size() + " installed shaders");
+        } catch (Exception e) {
+          setStatus("Error loading shaders: " + e.getMessage());
         }
       }
     };
@@ -246,17 +302,18 @@ public class ModsDialog extends JDialog {
   private void performSearch() {
     String query = searchField.getText().trim();
     if (query.isEmpty()) {
-      setStatus("Please enter a search query");
-      return;
+      // Load popular shaders if no query
+      query = "shader";
     }
 
     setStatus("Searching...");
     searchButton.setEnabled(false);
+    final String searchQuery = query;
 
     SwingWorker<List<ModrinthProject>, Void> worker = new SwingWorker<>() {
       @Override
       protected List<ModrinthProject> doInBackground() throws Exception {
-        return ModManager.searchMods(query, gameVersion);
+          return shaderManager.searchShaders(searchQuery, gameVersion);
       }
 
       @Override
@@ -267,7 +324,7 @@ public class ModsDialog extends JDialog {
           for (ModrinthProject project : results) {
             searchResultsModel.addElement(project);
           }
-          setStatus("Found " + results.size() + " mods");
+          setStatus("Found " + results.size() + " shaders");
         } catch (Exception e) {
           setStatus("Search error: " + e.getMessage());
         } finally {
@@ -278,19 +335,19 @@ public class ModsDialog extends JDialog {
     worker.execute();
   }
 
-  private void installSelectedMod() {
+  private void installSelectedShader() {
     ModrinthProject selected = searchResultsList.getSelectedValue();
     if (selected == null) {
-      setStatus("Please select a mod to install");
+      setStatus("Please select a shader to install");
       return;
     }
 
     setStatus("Installing " + selected.getTitle() + "...");
 
-    SwingWorker<InstalledMod, String> worker = new SwingWorker<>() {
+    SwingWorker<InstalledMod, String> worker = new SwingWorker<InstalledMod, String>() {
       @Override
       protected InstalledMod doInBackground() throws Exception {
-        return ModManager.installMod(selected, gameVersion, this::publish);
+        return shaderManager.installShader(selected, gameVersion, this::publish);
       }
 
       @Override
@@ -303,10 +360,12 @@ public class ModsDialog extends JDialog {
       @Override
       protected void done() {
         try {
-          InstalledMod mod = get();
-          if (mod != null) {
-            installedModsModel.addElement(mod);
-            setStatus("Installed: " + mod.getDisplayName());
+          InstalledMod shader = get();
+          if (shader != null) {
+            installedShadersModel.addElement(shader);
+            setStatus("Installed: " + shader.getDisplayName());
+            // Refresh Iris status in case it was auto-installed
+            checkIrisStatus();
           }
         } catch (Exception e) {
           setStatus("Install error: " + e.getMessage());
@@ -317,10 +376,10 @@ public class ModsDialog extends JDialog {
     worker.execute();
   }
 
-  private void removeSelectedMod() {
-    InstalledMod selected = installedModsList.getSelectedValue();
+  private void removeSelectedShader() {
+    InstalledMod selected = installedShadersList.getSelectedValue();
     if (selected == null) {
-      setStatus("Please select a mod to remove");
+      setStatus("Please select a shader to remove");
       return;
     }
 
@@ -336,14 +395,14 @@ public class ModsDialog extends JDialog {
     SwingWorker<Boolean, Void> worker = new SwingWorker<>() {
       @Override
       protected Boolean doInBackground() {
-        return ModManager.removeMod(selected, msg -> setStatus(msg));
+        return shaderManager.removeShader(selected, msg -> setStatus(msg));
       }
 
       @Override
       protected void done() {
         try {
           if (get()) {
-            installedModsModel.removeElement(selected);
+            installedShadersModel.removeElement(selected);
             setStatus("Removed: " + selected.getDisplayName());
           }
         } catch (Exception e) {
@@ -359,18 +418,18 @@ public class ModsDialog extends JDialog {
   }
 
   /**
-   * Custom renderer for installed mods list.
+   * Custom renderer for installed shaders list.
    */
   @SuppressWarnings("serial")
-  private class InstalledModRenderer extends DefaultListCellRenderer {
+  private class InstalledShaderRenderer extends DefaultListCellRenderer {
     @Override
     public Component getListCellRendererComponent(JList<?> list, Object value,
         int index, boolean isSelected, boolean cellHasFocus) {
       super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
 
       if (value instanceof InstalledMod) {
-        InstalledMod mod = (InstalledMod) value;
-        setText(mod.getDisplayName() + " v" + mod.getVersion() + " (" + mod.getFormattedSize() + ")");
+        InstalledMod shader = (InstalledMod) value;
+        setText(shader.getDisplayName() + " (" + shader.getFormattedSize() + ")");
       }
 
       setBackground(isSelected ? ACCENT_COLOR : INPUT_COLOR);
@@ -382,10 +441,10 @@ public class ModsDialog extends JDialog {
   }
 
   /**
-   * Custom renderer for Modrinth project search results.
+   * Custom renderer for Modrinth shader search results.
    */
   @SuppressWarnings("serial")
-  private class ModrinthProjectRenderer extends DefaultListCellRenderer {
+  private class ModrinthShaderRenderer extends DefaultListCellRenderer {
     @Override
     public Component getListCellRendererComponent(JList<?> list, Object value,
         int index, boolean isSelected, boolean cellHasFocus) {

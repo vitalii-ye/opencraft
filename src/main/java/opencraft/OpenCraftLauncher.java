@@ -816,7 +816,8 @@ public class OpenCraftLauncher extends JFrame {
       try {
         Path gameModsDir = minecraftDir.resolve("mods");
         System.out.println("Syncing mods for version " + baseGameVersion + " to: " + gameModsDir);
-        ModManager.syncModsToDirectory(baseGameVersion, gameModsDir, msg -> System.out.println("Mod sync: " + msg));
+        ModManager modManager = new ModManager();
+        modManager.syncModsToDirectory(baseGameVersion, gameModsDir, msg -> System.out.println("Mod sync: " + msg));
       } catch (IOException e) {
         System.out.println("Warning: Failed to sync mods: " + e.getMessage());
         // Non-fatal, continue with launch

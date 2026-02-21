@@ -19,11 +19,47 @@ import java.util.stream.Stream;
  */
 public class ModManager {
 
+    private final Path baseModsDir;
+    private final Path activeModsDir;
+
+    /**
+     * Creates a ModManager using the default Minecraft directory paths.
+     */
+    public ModManager() {
+        this(MinecraftPathResolver.getMinecraftDirectory().resolve("mods"),
+             MinecraftPathResolver.getModsDirectory());
+    }
+
+    /**
+     * Creates a ModManager with custom directories for testability.
+     *
+     * @param baseModsDir   Root directory for per-version mod storage (contains version subdirectories)
+     * @param activeModsDir Directory where active mods are placed for the running game
+     */
+    public ModManager(Path baseModsDir, Path activeModsDir) {
+        this.baseModsDir = baseModsDir;
+        this.activeModsDir = activeModsDir;
+    }
+
+    /**
+     * Returns the mods directory for a specific game version.
+     */
+    public Path getModsDirectory(String gameVersion) {
+        return baseModsDir.resolve(gameVersion);
+    }
+
+    /**
+     * Returns the active mods directory.
+     */
+    public Path getActiveModsDirectory() {
+        return activeModsDir;
+    }
+
     /**
      * Gets all installed mods for a specific game version.
      */
-    public static List<InstalledMod> getInstalledMods(String gameVersion) throws IOException {
-        Path modsDir = MinecraftPathResolver.getModsDirectory(gameVersion);
+    public List<InstalledMod> getInstalledMods(String gameVersion) throws IOException {
+        Path modsDir = getModsDirectory(gameVersion);
         List<InstalledMod> mods = new ArrayList<>();
 
         if (!Files.exists(modsDir)) {
@@ -41,15 +77,14 @@ public class ModManager {
     /**
      * Gets all installed mods in the active mods directory.
      */
-    public static List<InstalledMod> getActiveInstalledMods() throws IOException {
-        Path modsDir = MinecraftPathResolver.getModsDirectory();
+    public List<InstalledMod> getActiveInstalledMods() throws IOException {
         List<InstalledMod> mods = new ArrayList<>();
 
-        if (!Files.exists(modsDir)) {
+        if (!Files.exists(activeModsDir)) {
             return mods;
         }
 
-        try (Stream<Path> files = Files.list(modsDir)) {
+        try (Stream<Path> files = Files.list(activeModsDir)) {
             files.filter(ModManager::isModFile)
                  .forEach(file -> mods.add(InstalledMod.fromFile(file, "active", InstalledMod.ModType.MOD)));
         }
@@ -65,7 +100,7 @@ public class ModManager {
      * @param logger      Progress logger
      * @return The installed mod, or null if installation failed
      */
-    public static InstalledMod installMod(ModrinthProject project, String gameVersion, Consumer<String> logger)
+    public InstalledMod installMod(ModrinthProject project, String gameVersion, Consumer<String> logger)
             throws IOException, InterruptedException {
         
         log(logger, "Finding compatible version of " + project.getTitle() + "...");
@@ -88,7 +123,7 @@ public class ModManager {
         }
 
         // Download to the version-specific mods directory
-        Path modsDir = MinecraftPathResolver.getModsDirectory(gameVersion);
+        Path modsDir = getModsDirectory(gameVersion);
         Files.createDirectories(modsDir);
 
         Path destination = modsDir.resolve(file.getFilename());
@@ -114,7 +149,7 @@ public class ModManager {
     /**
      * Installs a mod from a specific version.
      */
-    public static InstalledMod installModVersion(ModrinthVersion version, String gameVersion, Consumer<String> logger)
+    public InstalledMod installModVersion(ModrinthVersion version, String gameVersion, Consumer<String> logger)
             throws IOException, InterruptedException {
         
         ModrinthFile file = version.getPrimaryFile();
@@ -122,7 +157,7 @@ public class ModManager {
             throw new IOException("No downloadable file found");
         }
 
-        Path modsDir = MinecraftPathResolver.getModsDirectory(gameVersion);
+        Path modsDir = getModsDirectory(gameVersion);
         Files.createDirectories(modsDir);
 
         Path destination = modsDir.resolve(file.getFilename());
@@ -138,7 +173,7 @@ public class ModManager {
     /**
      * Removes an installed mod.
      */
-    public static boolean removeMod(InstalledMod mod, Consumer<String> logger) {
+    public boolean removeMod(InstalledMod mod, Consumer<String> logger) {
         try {
             Path filePath = mod.getFilePath();
             
@@ -148,7 +183,7 @@ public class ModManager {
             }
 
             // Also remove from active mods directory if present
-            Path activeModPath = MinecraftPathResolver.getModsDirectory().resolve(mod.getFileName());
+            Path activeModPath = activeModsDir.resolve(mod.getFileName());
             if (Files.exists(activeModPath)) {
                 Files.delete(activeModPath);
             }
@@ -164,9 +199,8 @@ public class ModManager {
      * Syncs mods from a version-specific directory to the active mods directory.
      * This is called before launching the game to ensure the correct mods are loaded.
      */
-    public static void syncModsForVersion(String gameVersion, Consumer<String> logger) throws IOException {
-        Path versionModsDir = MinecraftPathResolver.getModsDirectory(gameVersion);
-        Path activeModsDir = MinecraftPathResolver.getModsDirectory();
+    public void syncModsForVersion(String gameVersion, Consumer<String> logger) throws IOException {
+        Path versionModsDir = getModsDirectory(gameVersion);
         syncModsToDirectory(versionModsDir, activeModsDir, gameVersion, logger);
     }
 
@@ -174,15 +208,15 @@ public class ModManager {
      * Syncs mods from a version-specific directory to a target directory.
      * This is called before launching the game to ensure the correct mods are loaded.
      */
-    public static void syncModsToDirectory(String gameVersion, Path targetDir, Consumer<String> logger) throws IOException {
-        Path versionModsDir = MinecraftPathResolver.getModsDirectory(gameVersion);
+    public void syncModsToDirectory(String gameVersion, Path targetDir, Consumer<String> logger) throws IOException {
+        Path versionModsDir = getModsDirectory(gameVersion);
         syncModsToDirectory(versionModsDir, targetDir, gameVersion, logger);
     }
 
     /**
      * Internal method to sync mods from source to target directory.
      */
-    private static void syncModsToDirectory(Path sourceModsDir, Path targetModsDir, String gameVersion, Consumer<String> logger) throws IOException {
+    private void syncModsToDirectory(Path sourceModsDir, Path targetModsDir, String gameVersion, Consumer<String> logger) throws IOException {
         // Create directories if they don't exist
         Files.createDirectories(sourceModsDir);
         Files.createDirectories(targetModsDir);
@@ -221,15 +255,15 @@ public class ModManager {
     /**
      * Checks if a mod is installed for a specific version.
      */
-    public static boolean isModInstalled(String modFileName, String gameVersion) {
-        Path modPath = MinecraftPathResolver.getModsDirectory(gameVersion).resolve(modFileName);
+    public boolean isModInstalled(String modFileName, String gameVersion) {
+        Path modPath = getModsDirectory(gameVersion).resolve(modFileName);
         return Files.exists(modPath);
     }
 
     /**
      * Searches for mods on Modrinth.
      */
-    public static List<ModrinthProject> searchMods(String query, String gameVersion) 
+    public List<ModrinthProject> searchMods(String query, String gameVersion) 
             throws IOException, InterruptedException {
         return ModrinthApiClient.searchMods(query, gameVersion, "fabric", 20);
     }
@@ -237,11 +271,10 @@ public class ModManager {
     /**
      * Copies a mod file to the active mods directory.
      */
-    private static void copyToActiveModsDir(Path modFile, Consumer<String> logger) {
+    private void copyToActiveModsDir(Path modFile, Consumer<String> logger) {
         try {
-            Path activeDir = MinecraftPathResolver.getModsDirectory();
-            Files.createDirectories(activeDir);
-            Path dest = activeDir.resolve(modFile.getFileName());
+            Files.createDirectories(activeModsDir);
+            Path dest = activeModsDir.resolve(modFile.getFileName());
             Files.copy(modFile, dest, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
             log(logger, "Note: Could not copy to active mods directory: " + e.getMessage());
@@ -251,7 +284,7 @@ public class ModManager {
     /**
      * Checks if a file is a mod file (.jar).
      */
-    private static boolean isModFile(Path file) {
+    static boolean isModFile(Path file) {
         if (!Files.isRegularFile(file)) {
             return false;
         }

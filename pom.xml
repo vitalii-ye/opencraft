@@ -70,19 +70,23 @@
             <version>5.10.3</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <version>5.12.0</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-junit-jupiter</artifactId>
+            <version>5.12.0</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
     
     <!-- Build Configuration -->
     <build>
         <finalName>${final.name}</finalName>
-        
-        <!-- Custom Source Directory Configuration -->
-        <sourceDirectory>src/java</sourceDirectory>
-        <resources>
-            <resource>
-                <directory>src/resources</directory>
-            </resource>
-        </resources>
         
         <!-- Plugin Management -->
         <pluginManagement>
@@ -295,7 +299,7 @@
                                         <mainClass>${main.class}</mainClass>
                                         <addDependencies>false</addDependencies>
                                     </classPath>
-                                    <icon>src/resources/icon.ico</icon>
+                                    <icon>src/main/resources/icon.ico</icon>
                                     <jre>
                                         <bundledJre64Bit>false</bundledJre64Bit>
                                         <bundledJreAsFallback>false</bundledJreAsFallback>

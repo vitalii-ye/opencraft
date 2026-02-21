@@ -15,8 +15,12 @@ public class ConfigurationManager {
     private final Path configPath;
 
     public ConfigurationManager() {
+        this(MinecraftPathResolver.getMinecraftDirectory().resolve(CONFIG_FILE));
+    }
+
+    public ConfigurationManager(Path configPath) {
         this.properties = new Properties();
-        this.configPath = MinecraftPathResolver.getMinecraftDirectory().resolve(CONFIG_FILE);
+        this.configPath = configPath;
         load();
     }
 

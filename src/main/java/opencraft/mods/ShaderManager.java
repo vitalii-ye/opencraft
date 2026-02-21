@@ -22,18 +22,38 @@ public class ShaderManager {
     private static final String IRIS_PROJECT_SLUG = "iris";
     private static final String SODIUM_PROJECT_SLUG = "sodium"; // Iris dependency
 
+    private final Path shaderpacksDir;
+    private final ModManager modManager;
+
+    /**
+     * Creates a ShaderManager using default Minecraft directory paths.
+     */
+    public ShaderManager() {
+        this(MinecraftPathResolver.getShaderpacksDirectory(), new ModManager());
+    }
+
+    /**
+     * Creates a ShaderManager with custom directories for testability.
+     *
+     * @param shaderpacksDir Directory where shader packs are stored
+     * @param modManager     ModManager instance for Iris/Sodium installation
+     */
+    public ShaderManager(Path shaderpacksDir, ModManager modManager) {
+        this.shaderpacksDir = shaderpacksDir;
+        this.modManager = modManager;
+    }
+
     /**
      * Gets all installed shader packs.
      */
-    public static List<InstalledMod> getInstalledShaders() throws IOException {
-        Path shadersDir = MinecraftPathResolver.getShaderpacksDirectory();
+    public List<InstalledMod> getInstalledShaders() throws IOException {
         List<InstalledMod> shaders = new ArrayList<>();
 
-        if (!Files.exists(shadersDir)) {
+        if (!Files.exists(shaderpacksDir)) {
             return shaders;
         }
 
-        try (Stream<Path> files = Files.list(shadersDir)) {
+        try (Stream<Path> files = Files.list(shaderpacksDir)) {
             files.filter(ShaderManager::isShaderFile)
                  .forEach(file -> shaders.add(InstalledMod.fromFile(file, "any", InstalledMod.ModType.SHADER)));
         }
@@ -49,7 +69,7 @@ public class ShaderManager {
      * @param logger      Progress logger
      * @return true if Iris is installed (either already present or newly installed)
      */
-    public static boolean ensureIrisInstalled(String gameVersion, Consumer<String> logger)
+    public boolean ensureIrisInstalled(String gameVersion, Consumer<String> logger)
             throws IOException, InterruptedException {
         
         // Check if Iris is already installed
@@ -65,7 +85,7 @@ public class ShaderManager {
             log(logger, "Installing Sodium (Iris dependency)...");
             try {
                 ModrinthProject sodiumProject = ModrinthApiClient.getProject(SODIUM_PROJECT_SLUG);
-                ModManager.installMod(sodiumProject, gameVersion, logger);
+                modManager.installMod(sodiumProject, gameVersion, logger);
             } catch (Exception e) {
                 log(logger, "Warning: Could not install Sodium: " + e.getMessage());
                 // Continue anyway, Iris might work without it in some versions
@@ -75,7 +95,7 @@ public class ShaderManager {
         // Install Iris
         try {
             ModrinthProject irisProject = ModrinthApiClient.getIrisProject();
-            ModManager.installMod(irisProject, gameVersion, logger);
+            modManager.installMod(irisProject, gameVersion, logger);
             log(logger, "Iris installed successfully!");
             return true;
         } catch (Exception e) {
@@ -87,8 +107,8 @@ public class ShaderManager {
     /**
      * Checks if Iris is installed for the given game version.
      */
-    public static boolean isIrisInstalled(String gameVersion) throws IOException {
-        List<InstalledMod> mods = ModManager.getInstalledMods(gameVersion);
+    public boolean isIrisInstalled(String gameVersion) throws IOException {
+        List<InstalledMod> mods = modManager.getInstalledMods(gameVersion);
         for (InstalledMod mod : mods) {
             String name = mod.getFileName().toLowerCase();
             if (name.contains("iris")) {
@@ -101,8 +121,8 @@ public class ShaderManager {
     /**
      * Checks if Sodium is installed for the given game version.
      */
-    public static boolean isSodiumInstalled(String gameVersion) throws IOException {
-        List<InstalledMod> mods = ModManager.getInstalledMods(gameVersion);
+    public boolean isSodiumInstalled(String gameVersion) throws IOException {
+        List<InstalledMod> mods = modManager.getInstalledMods(gameVersion);
         for (InstalledMod mod : mods) {
             String name = mod.getFileName().toLowerCase();
             if (name.contains("sodium")) {
@@ -121,7 +141,7 @@ public class ShaderManager {
      * @param logger        Progress logger
      * @return The installed shader, or null if installation failed
      */
-    public static InstalledMod installShader(ModrinthProject shaderProject, String gameVersion, Consumer<String> logger)
+    public InstalledMod installShader(ModrinthProject shaderProject, String gameVersion, Consumer<String> logger)
             throws IOException, InterruptedException {
         
         // Ensure Iris is installed first
@@ -153,10 +173,9 @@ public class ShaderManager {
         }
 
         // Download to shaderpacks directory
-        Path shadersDir = MinecraftPathResolver.getShaderpacksDirectory();
-        Files.createDirectories(shadersDir);
+        Files.createDirectories(shaderpacksDir);
 
-        Path destination = shadersDir.resolve(file.getFilename());
+        Path destination = shaderpacksDir.resolve(file.getFilename());
 
         // Check if already installed
         if (Files.exists(destination)) {
@@ -176,7 +195,7 @@ public class ShaderManager {
     /**
      * Removes an installed shader.
      */
-    public static boolean removeShader(InstalledMod shader, Consumer<String> logger) {
+    public boolean removeShader(InstalledMod shader, Consumer<String> logger) {
         try {
             Path filePath = shader.getFilePath();
             
@@ -196,7 +215,7 @@ public class ShaderManager {
     /**
      * Searches for shaders on Modrinth.
      */
-    public static List<ModrinthProject> searchShaders(String query, String gameVersion) 
+    public List<ModrinthProject> searchShaders(String query, String gameVersion) 
             throws IOException, InterruptedException {
         return ModrinthApiClient.searchShaders(query, gameVersion, 20);
     }
@@ -204,7 +223,7 @@ public class ShaderManager {
     /**
      * Checks if a file is a shader file (.zip or folder).
      */
-    private static boolean isShaderFile(Path file) {
+    static boolean isShaderFile(Path file) {
         String name = file.getFileName().toString().toLowerCase();
         // Shader packs are usually .zip files
         return Files.isRegularFile(file) && name.endsWith(".zip");

@@ -22,6 +22,8 @@ public class UnifiedModsDialog extends JDialog {
   @SuppressWarnings("serial")
   private final MinecraftVersion version;
   private final String gameVersion;
+  private final transient ModManager modManager;
+  private final transient ShaderManager shaderManager;
 
   // Colors matching the main launcher theme
   private static final Color BG_COLOR = new Color(20, 20, 20);
@@ -36,6 +38,8 @@ public class UnifiedModsDialog extends JDialog {
     super(parent, "Manage Mods & Shaders - " + version.getDisplayName(), true);
     this.version = version;
     this.gameVersion = version.getBaseGameVersion();
+    this.modManager = new ModManager();
+    this.shaderManager = new ShaderManager();
 
     initializeUI();
 
@@ -268,7 +272,7 @@ public class UnifiedModsDialog extends JDialog {
       SwingWorker<List<InstalledMod>, Void> worker = new SwingWorker<>() {
         @Override
         protected List<InstalledMod> doInBackground() throws Exception {
-          return ModManager.getInstalledMods(gameVersion);
+          return modManager.getInstalledMods(gameVersion);
         }
 
         @Override
@@ -301,7 +305,7 @@ public class UnifiedModsDialog extends JDialog {
       SwingWorker<List<ModrinthProject>, Void> worker = new SwingWorker<>() {
         @Override
         protected List<ModrinthProject> doInBackground() throws Exception {
-          return ModManager.searchMods(query, gameVersion);
+          return modManager.searchMods(query, gameVersion);
         }
 
         @Override
@@ -332,10 +336,10 @@ public class UnifiedModsDialog extends JDialog {
 
       setStatus("Installing " + selected.getTitle() + "...");
 
-      SwingWorker<InstalledMod, String> worker = new SwingWorker<>() {
+      SwingWorker<InstalledMod, String> worker = new SwingWorker<InstalledMod, String>() {
         @Override
         protected InstalledMod doInBackground() throws Exception {
-          return ModManager.installMod(selected, gameVersion, this::publish);
+          return modManager.installMod(selected, gameVersion, this::publish);
         }
 
         @Override
@@ -381,7 +385,7 @@ public class UnifiedModsDialog extends JDialog {
       SwingWorker<Boolean, Void> worker = new SwingWorker<>() {
         @Override
         protected Boolean doInBackground() {
-          return ModManager.removeMod(selected, msg -> setStatus(msg));
+          return modManager.removeMod(selected, msg -> setStatus(msg));
         }
 
         @Override
@@ -614,7 +618,7 @@ public class UnifiedModsDialog extends JDialog {
       SwingWorker<Boolean, Void> worker = new SwingWorker<>() {
         @Override
         protected Boolean doInBackground() throws Exception {
-          return ShaderManager.isIrisInstalled(gameVersion);
+          return shaderManager.isIrisInstalled(gameVersion);
         }
 
         @Override
@@ -641,7 +645,7 @@ public class UnifiedModsDialog extends JDialog {
       SwingWorker<List<InstalledMod>, Void> worker = new SwingWorker<>() {
         @Override
         protected List<InstalledMod> doInBackground() throws Exception {
-          return ShaderManager.getInstalledShaders();
+          return shaderManager.getInstalledShaders();
         }
 
         @Override
@@ -674,7 +678,7 @@ public class UnifiedModsDialog extends JDialog {
       SwingWorker<List<ModrinthProject>, Void> worker = new SwingWorker<>() {
         @Override
         protected List<ModrinthProject> doInBackground() throws Exception {
-          return ShaderManager.searchShaders(searchQuery, gameVersion);
+          return shaderManager.searchShaders(searchQuery, gameVersion);
         }
 
         @Override
@@ -705,10 +709,10 @@ public class UnifiedModsDialog extends JDialog {
 
       setStatus("Installing " + selected.getTitle() + "...");
 
-      SwingWorker<InstalledMod, String> worker = new SwingWorker<>() {
+      SwingWorker<InstalledMod, String> worker = new SwingWorker<InstalledMod, String>() {
         @Override
         protected InstalledMod doInBackground() throws Exception {
-          return ShaderManager.installShader(selected, gameVersion, this::publish);
+          return shaderManager.installShader(selected, gameVersion, this::publish);
         }
 
         @Override
@@ -755,7 +759,7 @@ public class UnifiedModsDialog extends JDialog {
       SwingWorker<Boolean, Void> worker = new SwingWorker<>() {
         @Override
         protected Boolean doInBackground() {
-          return ShaderManager.removeShader(selected, msg -> setStatus(msg));
+          return shaderManager.removeShader(selected, msg -> setStatus(msg));
         }
 
         @Override
