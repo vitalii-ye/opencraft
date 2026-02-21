@@ -15,8 +15,7 @@ import java.nio.file.StandardCopyOption;
 /**
  * Shared utility for downloading files over HTTP.
  *
- * <p>All methods skip the download silently when the destination already exists.
- * The standard {@link LaunchConstants#USER_AGENT} header is sent with every request.
+ * <p>The standard {@link LaunchConstants#USER_AGENT} header is sent with every request.
  */
 public final class FileDownloader {
 
@@ -25,8 +24,7 @@ public final class FileDownloader {
     private FileDownloader() {}
 
     /**
-     * Downloads a file from {@code url} to {@code dest}.
-     * Does nothing if {@code dest} already exists.
+     * Downloads a file from {@code url} to {@code dest}, replacing it if it already exists.
      *
      * @param url  the URL to download from
      * @param dest the destination path (parent directories are created as needed)
@@ -34,10 +32,6 @@ public final class FileDownloader {
      * @throws InterruptedException if the request is interrupted
      */
     public static void download(String url, Path dest) throws IOException, InterruptedException {
-        if (Files.exists(dest)) {
-            return;
-        }
-
         Files.createDirectories(dest.getParent());
 
         HttpRequest request = HttpRequest.newBuilder(URI.create(url))
